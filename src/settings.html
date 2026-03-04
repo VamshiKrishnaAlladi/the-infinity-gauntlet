@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>URL Blocker Settings</title>
+        <link rel="icon" type="image/svg+xml" href="../assets/gauntlet.svg">
+        <link rel="stylesheet" href="settings.css">
+    </head>
+
+    <body>
+        <div class="settings-container">
+            <header>
+                <img class="header-icon" src="../assets/gauntlet.svg" alt="Infinity Gauntlet">
+                <h1>URL Blocker Settings</h1>
+            </header>
+
+            <section class="settings-section">
+                <h2>Blocked Sites</h2>
+                <p class="section-description">
+                    Manage your list of blocked websites. You can add new sites or remove existing ones.
+                </p>
+
+                <div class="add-url-section">
+                    <input type="text" id="url-input" placeholder="Enter URL or domain to block">
+                    <button id="add-url-button" class="primary-button">
+                        <svg class="button-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" />
+                            <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" />
+                        </svg>
+                        Add
+                    </button>
+                </div>
+
+                <div class="error-message" id="error-message"></div>
+
+                <div class="url-list-container">
+                    <ul id="url-list" class="url-list">
+                    </ul>
+                    <div class="empty-state" id="empty-state">
+                        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round" />
+                            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <p>No sites blocked yet</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <h2>Bypass Duration</h2>
+                <p class="section-description">
+                    How long to temporarily allow a blocked site when using the bypass button.
+                </p>
+                <div class="input-group">
+                    <input type="number" id="bypass-duration" min="10" max="3600" step="10" value="600">
+                    <span class="input-suffix">seconds</span>
+                </div>
+                <p class="setting-hint" id="duration-hint">10 minutes</p>
+            </section>
+
+            <div class="button-group">
+                <button id="save-button" class="primary-button">Save Settings</button>
+            </div>
+
+            <div class="status-message" id="status-message"></div>
+        </div>
+        <script src="utils/ui-helpers.js"></script>
+        <script src="settings.js"></script>
+    </body>
+
+</html>

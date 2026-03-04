@@ -1,0 +1,28 @@
+{
+    "name": "The Infinity Gauntlet",
+    "description": "The Infinity Gauntlet - An all-purpose Extension for Chromium based browsers",
+    "version": "1.0",
+    "manifest_version": 3,
+    "permissions": [
+        "storage",
+        "webNavigation",
+        "tabs"
+    ],
+    "background": {
+        "service_worker": "src/service-worker.js"
+    },
+    "action": {
+        "default_popup": "src/popup.html",
+        "default_icon": "assets/gauntlet.png"
+    },
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "src/blocked.html"
+            ],
+            "matches": [
+                "<all_urls>"
+            ]
+        }
+    ]
+}

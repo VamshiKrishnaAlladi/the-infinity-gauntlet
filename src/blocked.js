@@ -1,6 +1,4 @@
-const { formatDuration } = typeof require !== 'undefined'
-    ? require( './utils/ui-helpers' )
-    : window.URLBlockerUI;
+const { formatDuration } = window.URLBlockerUI;
 
 const DEFAULT_BYPASS_DURATION = 600;
 
@@ -96,7 +94,6 @@ if ( typeof module !== 'undefined' && module.exports ) {
         requestBypass,
         handleBypassClick,
         setupBypassButton,
-        formatDuration,
         getBypassDuration,
         updateBypassButtonText,
         DEFAULT_BYPASS_DURATION

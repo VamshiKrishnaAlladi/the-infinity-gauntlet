@@ -1,3 +1,5 @@
+require( '../src/utils/ui-helpers' );
+
 global.chrome = {
     storage: {
         sync: {

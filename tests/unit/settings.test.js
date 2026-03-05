@@ -5,12 +5,12 @@ const {
     loadBlockedUrls,
     addUrl,
     removeUrl,
-    formatDuration,
     updateDurationHint,
     loadSettings,
     saveSettings,
     DEFAULT_BYPASS_DURATION
 } = require( '../../src/settings' );
+const { formatDuration } = require( '../../src/utils/ui-helpers' );
 
 describe( 'Settings UI Module', () => {
     let urlInput;

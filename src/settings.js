@@ -1,6 +1,4 @@
-const { formatDuration, sendMessageWithRetry } = typeof require !== 'undefined'
-    ? require( './utils/ui-helpers' )
-    : window.URLBlockerUI;
+const { formatDuration, sendMessageWithRetry } = window.URLBlockerUI;
 
 const DEFAULT_BYPASS_DURATION = 600;
 let blockedUrls = [];
@@ -181,7 +179,6 @@ document.addEventListener( 'DOMContentLoaded', () => {
 
 if ( typeof module !== 'undefined' && module.exports ) {
     module.exports = {
-        formatDuration,
         updateDurationHint,
         showStatus,
         showError,

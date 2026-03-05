@@ -1,6 +1,4 @@
-const { sendMessageWithRetry } = typeof require !== 'undefined'
-    ? require( './utils/ui-helpers' )
-    : window.URLBlockerUI;
+const { sendMessageWithRetry } = window.URLBlockerUI;
 
 const INTERNAL_URL_PREFIXES = [ 'chrome://', 'chrome-extension://', 'about:' ];
 const DEFAULT_BUTTON_TEXT = 'Block Site';
@@ -132,7 +130,6 @@ if ( typeof module !== 'undefined' && module.exports ) {
         getCurrentUrl,
         openSettings,
         showError,
-        clearError,
-        sendMessageWithRetry
+        clearError
     };
 }

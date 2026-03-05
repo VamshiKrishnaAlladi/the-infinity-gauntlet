@@ -45,6 +45,7 @@ body {
 
 /* Main container - centered content */
 .blocked-container {
+    position: relative;
     background-color: var(--bg-primary);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-lg);
@@ -169,6 +170,29 @@ h1 {
     font-size: 13px;
     color: var(--text-muted);
     margin-top: 12px;
+}
+
+/* Settings link - top right icon */
+.settings-link {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 6px;
+    border-radius: var(--radius-lg);
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.settings-link:hover {
+    color: var(--text-primary);
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.settings-icon {
+    width: 20px;
+    height: 20px;
+    display: block;
 }
 
 /* Responsive adjustments */

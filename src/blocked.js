@@ -75,15 +75,27 @@ async function handleBypassClick() {
     alert( 'Failed to grant bypass. Please try again.' );
 }
 
-function setupBypassButton() {
+function openSettings() {
+    chrome.tabs.create( { url: chrome.runtime.getURL( 'src/settings.html' ) } );
+}
+
+function setupEventListeners() {
     const bypassButton = document.getElementById( 'bypass-button' );
     if ( bypassButton ) bypassButton.addEventListener( 'click', handleBypassClick );
+
+    const settingsLink = document.getElementById( 'settings-link' );
+    if ( settingsLink ) {
+        settingsLink.addEventListener( 'click', ( e ) => {
+            e.preventDefault();
+            openSettings();
+        } );
+    }
 }
 
 document.addEventListener( 'DOMContentLoaded', () => {
     const blockedUrl = getBlockedUrl();
     displayBlockedMessage( blockedUrl );
-    setupBypassButton();
+    setupEventListeners();
     updateBypassButtonText();
 } );
 
@@ -93,7 +105,8 @@ if ( typeof module !== 'undefined' && module.exports ) {
         displayBlockedMessage,
         requestBypass,
         handleBypassClick,
-        setupBypassButton,
+        openSettings,
+        setupEventListeners,
         getBypassDuration,
         updateBypassButtonText,
         DEFAULT_BYPASS_DURATION

@@ -44,7 +44,6 @@ async function getCurrentUrl() {
         const urlInput = document.getElementById( 'url-input' );
         if ( !urlInput ) return;
         urlInput.value = tab.url;
-        urlInput.focus();
         urlInput.select();
         clearError();
     } catch ( error ) {
@@ -71,7 +70,7 @@ async function blockUrl() {
     try {
         const response = await sendMessageWithRetry( {
             type: 'addUrl',
-            url: url
+            url
         } );
 
         if ( response?.success ) {
@@ -102,9 +101,6 @@ function setupEventListeners() {
     const blockButton = document.getElementById( 'block-button' );
     if ( blockButton ) blockButton.addEventListener( 'click', blockUrl );
 
-    const getCurrentButton = document.getElementById( 'get-current-button' );
-    if ( getCurrentButton ) getCurrentButton.addEventListener( 'click', getCurrentUrl );
-
     const settingsLink = document.getElementById( 'settings-link' );
     if ( settingsLink ) {
         settingsLink.addEventListener( 'click', ( e ) => {
@@ -122,7 +118,10 @@ function setupEventListeners() {
     }
 }
 
-document.addEventListener( 'DOMContentLoaded', setupEventListeners );
+document.addEventListener( 'DOMContentLoaded', () => {
+    setupEventListeners();
+    getCurrentUrl();
+} );
 
 if ( typeof module !== 'undefined' && module.exports ) {
     module.exports = {

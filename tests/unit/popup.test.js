@@ -10,7 +10,6 @@ describe( 'Popup UI Module', () => {
     let urlInput;
     let blockButton;
     let errorMessage;
-    let getCurrentButton;
     let settingsLink;
 
     function setupDOM() {
@@ -26,9 +25,6 @@ describe( 'Popup UI Module', () => {
         errorMessage.id = 'error-message';
         errorMessage.className = 'error-message';
 
-        getCurrentButton = document.createElement( 'button' );
-        getCurrentButton.id = 'get-current-button';
-
         settingsLink = document.createElement( 'a' );
         settingsLink.id = 'settings-link';
         settingsLink.href = '#';
@@ -36,7 +32,6 @@ describe( 'Popup UI Module', () => {
         document.body.appendChild( urlInput );
         document.body.appendChild( blockButton );
         document.body.appendChild( errorMessage );
-        document.body.appendChild( getCurrentButton );
         document.body.appendChild( settingsLink );
     }
 

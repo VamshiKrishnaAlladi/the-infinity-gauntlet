@@ -1,15 +1,13 @@
+const fc = require( 'fast-check' );
 const {
     getBlockedUrls,
     saveBlockedUrls,
     resetBlockedUrlsCache,
     STORAGE_KEY
 } = require( '../../src/service-worker' );
-const { fc, validUrlPatternArbitrary, uniqueBlockedListArbitrary } = require( '../helpers/generators' );
 
 describe( 'Feature: url-blocker, Property 3: Storage Persistence Round-Trip', () => {
     let mockStorageState = {};
-
-    const uniqueUrlListArbitrary = uniqueBlockedListArbitrary();
 
     beforeEach( () => {
         resetBlockedUrlsCache();
@@ -31,20 +29,30 @@ describe( 'Feature: url-blocker, Property 3: Storage Persistence Round-Trip', ()
         } );
     } );
 
+    const urlPatternArbitrary = fc.stringOf(
+        fc.constantFrom(
+            'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+            'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+            '.', '-', '/', ':'
+        ),
+        { minLength: 1, maxLength: 100 }
+    ).filter( s => s.trim().length > 0 );
+
+    const uniqueUrlListArbitrary = fc.uniqueArray( urlPatternArbitrary, {
+        minLength: 0,
+        maxLength: 50
+    } );
+
     it( 'should persist and retrieve any URL list unchanged (round-trip)', async () => {
         await fc.assert(
             fc.asyncProperty( uniqueUrlListArbitrary, async ( urlList ) => {
-                // Reset state for each iteration
                 resetBlockedUrlsCache();
                 mockStorageState = {};
 
-                // Save the URL list to storage
                 await saveBlockedUrls( urlList );
-
-                // Retrieve the URL list from storage
                 const retrievedUrls = await getBlockedUrls();
 
-                // Verify the retrieved list equals the saved list
                 expect( retrievedUrls ).toEqual( urlList );
             } ),
             { numRuns: 100 }
@@ -55,25 +63,20 @@ describe( 'Feature: url-blocker, Property 3: Storage Persistence Round-Trip', ()
         await fc.assert(
             fc.asyncProperty(
                 uniqueUrlListArbitrary,
-                validUrlPatternArbitrary,
+                urlPatternArbitrary,
                 async ( initialList, newUrl ) => {
-                    // Reset state for each iteration
                     resetBlockedUrlsCache();
                     mockStorageState = {};
 
-                    // Skip if newUrl is already in the list (duplicate)
                     if ( initialList.includes( newUrl ) ) {
                         return true;
                     }
 
-                    // Save initial list
                     await saveBlockedUrls( initialList );
 
-                    // Add new URL to the list
                     const modifiedList = [ ...initialList, newUrl ];
                     await saveBlockedUrls( modifiedList );
 
-                    // Retrieve and verify
                     const retrievedUrls = await getBlockedUrls();
 
                     expect( retrievedUrls ).toEqual( modifiedList );
@@ -90,22 +93,17 @@ describe( 'Feature: url-blocker, Property 3: Storage Persistence Round-Trip', ()
             fc.asyncProperty(
                 uniqueUrlListArbitrary.filter( list => list.length > 0 ),
                 async ( urlList ) => {
-                    // Reset state for each iteration
                     resetBlockedUrlsCache();
                     mockStorageState = {};
 
-                    // Save initial list
                     await saveBlockedUrls( urlList );
 
-                    // Pick a random URL to remove
                     const indexToRemove = Math.floor( Math.random() * urlList.length );
                     const urlToRemove = urlList[ indexToRemove ];
                     const modifiedList = urlList.filter( ( _, i ) => i !== indexToRemove );
 
-                    // Save modified list
                     await saveBlockedUrls( modifiedList );
 
-                    // Retrieve and verify
                     const retrievedUrls = await getBlockedUrls();
 
                     expect( retrievedUrls ).toEqual( modifiedList );
@@ -122,20 +120,16 @@ describe( 'Feature: url-blocker, Property 3: Storage Persistence Round-Trip', ()
             fc.asyncProperty(
                 fc.array( uniqueUrlListArbitrary, { minLength: 1, maxLength: 10 } ),
                 async ( urlListSequence ) => {
-                    // Reset state for each iteration
                     resetBlockedUrlsCache();
                     mockStorageState = {};
 
-                    // Apply each modification in sequence
                     for ( const urlList of urlListSequence ) {
                         await saveBlockedUrls( urlList );
 
-                        // Verify after each save
                         const retrievedUrls = await getBlockedUrls();
                         expect( retrievedUrls ).toEqual( urlList );
                     }
 
-                    // Final verification - should have the last list
                     const finalUrls = await getBlockedUrls();
                     expect( finalUrls ).toEqual( urlListSequence[ urlListSequence.length - 1 ] );
                 }
@@ -149,17 +143,12 @@ describe( 'Feature: url-blocker, Property 3: Storage Persistence Round-Trip', ()
             fc.asyncProperty(
                 uniqueUrlListArbitrary,
                 async ( initialList ) => {
-                    // Reset state for each iteration
                     resetBlockedUrlsCache();
                     mockStorageState = {};
 
-                    // Save initial list
                     await saveBlockedUrls( initialList );
-
-                    // Clear the list
                     await saveBlockedUrls( [] );
 
-                    // Retrieve and verify empty
                     const retrievedUrls = await getBlockedUrls();
                     expect( retrievedUrls ).toEqual( [] );
                 }

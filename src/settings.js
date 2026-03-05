@@ -79,7 +79,7 @@ async function addUrl() {
     try {
         const response = await sendMessageWithRetry( {
             type: 'addUrl',
-            url: url
+            url
         } );
 
         if ( response?.success ) {
@@ -99,7 +99,7 @@ async function removeUrl( url ) {
     try {
         const response = await sendMessageWithRetry( {
             type: 'removeUrl',
-            url: url
+            url
         } );
 
         if ( response?.success ) {

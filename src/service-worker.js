@@ -281,11 +281,7 @@ chrome.webNavigation.onBeforeNavigate.addListener( async ( details ) => {
 } );
 
 async function initialize() {
-    try {
-        await getBlockedUrls();
-    } catch ( error ) {
-        console.error( 'Service Worker: Initialization error:', error );
-    }
+    await getBlockedUrls();
 }
 
 initialize();

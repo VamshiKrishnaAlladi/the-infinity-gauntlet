@@ -41,7 +41,7 @@ async function requestBypass( url ) {
 
         const response = await chrome.runtime.sendMessage( {
             type: 'addBypass',
-            url: url,
+            url,
             duration: durationMs
         } );
 

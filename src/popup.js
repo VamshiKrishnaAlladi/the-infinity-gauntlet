@@ -44,7 +44,6 @@ async function getCurrentUrl() {
         const urlInput = document.getElementById( 'url-input' );
         if ( !urlInput ) return;
         urlInput.value = tab.url;
-        urlInput.select();
         clearError();
     } catch ( error ) {
         console.error( 'Failed to get current tab:', error );

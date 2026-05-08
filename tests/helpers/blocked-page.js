@@ -1,4 +1,5 @@
-const BLOCKED_HTML = 'chrome-extension://test-extension-id/src/blocked.html';
+/** replaceState-safe URL; getBlockedUrl only reads location.search */
+const BLOCKED_HTML = 'http://localhost/test-extension/blocked.html';
 
 const BLOCKED_PAGE_HTML = `
     <div class="blocked-container">
@@ -17,16 +18,11 @@ function setupBlockedPageDOM() {
 
 function setBlockedUrlParam( blockedUrl ) {
     const encodedUrl = encodeURIComponent( blockedUrl );
-    delete window.location;
-    window.location = {
-        search: `?url=${encodedUrl}`,
-        href: `${BLOCKED_HTML}?url=${encodedUrl}`
-    };
+    window.history.replaceState( {}, '', `${BLOCKED_HTML}?url=${encodedUrl}` );
 }
 
 function clearBlockedUrlParam() {
-    delete window.location;
-    window.location = { search: '', href: BLOCKED_HTML };
+    window.history.replaceState( {}, '', BLOCKED_HTML );
 }
 
 function checkBlockedPageDisplay() {

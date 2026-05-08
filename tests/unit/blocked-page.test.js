@@ -1,12 +1,11 @@
 const { getBlockedUrl, displayBlockedMessage } = require( '../../src/blocked' );
+const { mockLocationSearch } = require( '../helpers/integration' );
 
 describe( 'Blocked Page Module', () => {
-    // Store original window.location
-    let originalLocation;
+    let originalHref;
 
     beforeEach( () => {
-        // Save original location
-        originalLocation = window.location;
+        originalHref = window.location.href;
 
         // Clear document body
         document.body.innerHTML = '';
@@ -19,27 +18,11 @@ describe( 'Blocked Page Module', () => {
     } );
 
     afterEach( () => {
-        // Restore original location
-        Object.defineProperty( window, 'location', {
-            value: originalLocation,
-            writable: true
-        } );
+        window.history.replaceState( {}, '', originalHref );
 
         // Clean up DOM
         document.body.innerHTML = '';
     } );
-
-    /**
-     * Helper function to mock window.location.search
-     * @param {string} search - The query string to set (including '?')
-     */
-    function mockLocationSearch( search ) {
-        delete window.location;
-        window.location = {
-            ...originalLocation,
-            search: search
-        };
-    }
 
     describe( 'URL Parameter Extraction (getBlockedUrl)', () => {
         it( 'should extract URL from query parameter', () => {

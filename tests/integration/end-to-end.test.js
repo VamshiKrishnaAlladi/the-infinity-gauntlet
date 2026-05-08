@@ -9,23 +9,20 @@ const {
 const { getBlockedUrl, displayBlockedMessage } = require( '../../src/blocked' );
 
 describe( 'End-to-End Integration Tests', () => {
-    let originalLocation;
+    let originalHref;
 
     beforeEach( () => {
         jest.clearAllMocks();
         jest.spyOn( console, 'error' ).mockImplementation( () => { } );
         jest.spyOn( console, 'log' ).mockImplementation( () => { } );
-        originalLocation = window.location;
+        originalHref = window.location.href;
         document.body.innerHTML = '';
         setupBlockedUrlElement();
     } );
 
     afterEach( () => {
         jest.restoreAllMocks();
-        Object.defineProperty( window, 'location', {
-            value: originalLocation,
-            writable: true
-        } );
+        window.history.replaceState( {}, '', originalHref );
         document.body.innerHTML = '';
     } );
 
@@ -92,7 +89,7 @@ describe( 'End-to-End Integration Tests', () => {
             expect( addResponse.success ).toBe( true );
 
             const blockedUrl = 'https://instagram.com/explore';
-            mockLocationSearch( '?url=' + encodeURIComponent( blockedUrl ), originalLocation );
+            mockLocationSearch( '?url=' + encodeURIComponent( blockedUrl ) );
 
             const extractedUrl = getBlockedUrl();
             displayBlockedMessage( extractedUrl );
@@ -255,7 +252,7 @@ describe( 'End-to-End Integration Tests', () => {
             let urls = addResponse.urls;
             expect( isUrlBlocked( 'https://youtube.com/shorts/trending', urls ) ).toBe( true );
 
-            mockLocationSearch( '?url=https%3A%2F%2Fyoutube.com%2Fshorts%2Ftrending', originalLocation );
+            mockLocationSearch( '?url=https%3A%2F%2Fyoutube.com%2Fshorts%2Ftrending' );
             const blockedUrl = getBlockedUrl();
             displayBlockedMessage( blockedUrl );
             expect( document.getElementById( 'blocked-url' ).textContent ).toBe(
@@ -342,7 +339,7 @@ describe( 'End-to-End Integration Tests', () => {
             expect( addResponse.success ).toBe( true );
 
             const encodedUrl = encodeURIComponent( 'https://example.com/path?query=value&other=test' );
-            mockLocationSearch( '?url=' + encodedUrl, originalLocation );
+            mockLocationSearch( '?url=' + encodedUrl );
 
             const blockedUrl = getBlockedUrl();
             displayBlockedMessage( blockedUrl );

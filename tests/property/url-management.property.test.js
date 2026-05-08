@@ -1,5 +1,5 @@
 const { validateUrl, isDuplicate } = require( '../../src/service-worker' );
-const { fc, validUrlPatternArbitrary, whitespaceOnlyArbitrary, uniqueBlockedListArbitrary } = require( '../helpers/generators' );
+const { fc, validUrlPatternArbitrary, whitespaceOnlyArbitrary, uniqueBlockedListArbitrary, stringOf } = require( '../helpers/generators' );
 
 describe( 'Feature: url-blocker, Property 4: Invalid URL Rejection', () => {
     const uniqueUrlListArbitrary = uniqueBlockedListArbitrary();
@@ -57,7 +57,7 @@ describe( 'Feature: url-blocker, Property 4: Invalid URL Rejection', () => {
     it( 'should reject strings with only spaces', async () => {
         await fc.assert(
             fc.asyncProperty(
-                fc.stringOf( fc.constant( ' ' ), { minLength: 1, maxLength: 50 } ),
+                stringOf( fc.constant( ' ' ), { minLength: 1, maxLength: 50 } ),
                 async ( spacesOnly ) => {
                     const isValid = validateUrl( spacesOnly );
                     expect( isValid ).toBe( false );
@@ -70,7 +70,7 @@ describe( 'Feature: url-blocker, Property 4: Invalid URL Rejection', () => {
     it( 'should reject strings with only tabs', async () => {
         await fc.assert(
             fc.asyncProperty(
-                fc.stringOf( fc.constant( '\t' ), { minLength: 1, maxLength: 50 } ),
+                stringOf( fc.constant( '\t' ), { minLength: 1, maxLength: 50 } ),
                 async ( tabsOnly ) => {
                     const isValid = validateUrl( tabsOnly );
                     expect( isValid ).toBe( false );
@@ -83,7 +83,7 @@ describe( 'Feature: url-blocker, Property 4: Invalid URL Rejection', () => {
     it( 'should reject strings with only newlines', async () => {
         await fc.assert(
             fc.asyncProperty(
-                fc.stringOf( fc.constant( '\n' ), { minLength: 1, maxLength: 50 } ),
+                stringOf( fc.constant( '\n' ), { minLength: 1, maxLength: 50 } ),
                 async ( newlinesOnly ) => {
                     const isValid = validateUrl( newlinesOnly );
                     expect( isValid ).toBe( false );
@@ -96,7 +96,7 @@ describe( 'Feature: url-blocker, Property 4: Invalid URL Rejection', () => {
     it( 'should reject mixed whitespace strings', async () => {
         await fc.assert(
             fc.asyncProperty(
-                fc.stringOf(
+                stringOf(
                     fc.constantFrom( ' ', '\t', '\n', '\r', '\f', '\v' ),
                     { minLength: 1, maxLength: 50 }
                 ),
@@ -330,7 +330,7 @@ describe( 'Feature: url-blocker, Property 8: Substring Matching Behavior', () =>
         ''
     );
 
-    const urlSuffixArbitrary = fc.stringOf(
+    const urlSuffixArbitrary = stringOf(
         fc.constantFrom(
             'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
             'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',

@@ -230,19 +230,16 @@ describe( 'Cross-Component Communication', () => {
     } );
 
     describe( 'Blocked Page URL Parameter Handling', () => {
-        let originalLocation;
+        let originalHref;
 
         beforeEach( () => {
-            originalLocation = window.location;
+            originalHref = window.location.href;
             document.body.innerHTML = '';
             setupBlockedUrlElement();
         } );
 
         afterEach( () => {
-            Object.defineProperty( window, 'location', {
-                value: originalLocation,
-                writable: true
-            } );
+            window.history.replaceState( {}, '', originalHref );
             document.body.innerHTML = '';
         } );
 
@@ -252,7 +249,7 @@ describe( 'Cross-Component Communication', () => {
          */
         describe( 'URL Parameter Extraction', () => {
             it( 'should extract simple URL from query parameter', () => {
-                mockLocationSearch( '?url=https://youtube.com', originalLocation );
+                mockLocationSearch( '?url=https://youtube.com' );
 
                 const result = getBlockedUrl();
 
@@ -260,7 +257,7 @@ describe( 'Cross-Component Communication', () => {
             } );
 
             it( 'should decode URL-encoded parameter', () => {
-                mockLocationSearch( '?url=https%3A%2F%2Fyoutube.com%2Fshorts%2Fabc123', originalLocation );
+                mockLocationSearch( '?url=https%3A%2F%2Fyoutube.com%2Fshorts%2Fabc123' );
 
                 const result = getBlockedUrl();
 
@@ -268,7 +265,7 @@ describe( 'Cross-Component Communication', () => {
             } );
 
             it( 'should handle URL with query parameters', () => {
-                mockLocationSearch( '?url=https%3A%2F%2Fexample.com%2Fpath%3Fquery%3Dvalue', originalLocation );
+                mockLocationSearch( '?url=https%3A%2F%2Fexample.com%2Fpath%3Fquery%3Dvalue' );
 
                 const result = getBlockedUrl();
 
@@ -276,7 +273,7 @@ describe( 'Cross-Component Communication', () => {
             } );
 
             it( 'should return empty string when URL parameter is missing', () => {
-                mockLocationSearch( '', originalLocation );
+                mockLocationSearch( '' );
 
                 const result = getBlockedUrl();
 
@@ -315,7 +312,7 @@ describe( 'Cross-Component Communication', () => {
          */
         describe( 'Extract and Display Flow', () => {
             it( 'should correctly extract and display blocked URL', () => {
-                mockLocationSearch( '?url=https%3A%2F%2Ftwitter.com%2Fhome', originalLocation );
+                mockLocationSearch( '?url=https%3A%2F%2Ftwitter.com%2Fhome' );
 
                 const url = getBlockedUrl();
                 displayBlockedMessage( url );
@@ -325,7 +322,7 @@ describe( 'Cross-Component Communication', () => {
             } );
 
             it( 'should handle missing URL parameter gracefully', () => {
-                mockLocationSearch( '?other=value', originalLocation );
+                mockLocationSearch( '?other=value' );
 
                 const url = getBlockedUrl();
                 displayBlockedMessage( url );

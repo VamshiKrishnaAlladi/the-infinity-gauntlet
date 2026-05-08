@@ -1,6 +1,9 @@
-function mockLocationSearch( search, originalLocation ) {
-    delete window.location;
-    window.location = { ...originalLocation, search };
+function mockLocationSearch( search ) {
+    const base = 'http://localhost/jest-blocked-page';
+    const href = search === '' || search === undefined
+        ? base
+        : `${base}${search.startsWith( '?' ) ? search : `?${search}`}`;
+    window.history.replaceState( {}, '', href );
 }
 
 function setupBlockedUrlElement() {

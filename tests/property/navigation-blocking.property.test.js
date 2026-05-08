@@ -7,7 +7,8 @@ const {
     domainNameArbitrary,
     tldArbitrary,
     urlPathArbitrary,
-    uniqueBlockedListArbitrary
+    uniqueBlockedListArbitrary,
+    stringOf
 } = require( '../helpers/generators' );
 const {
     simulateNavigationInterception,
@@ -173,7 +174,7 @@ describe( 'Feature: url-blocker, Property 9: Blocked URL Navigation Interception
                 protocolArbitrary,
                 domainNameArbitrary,
                 tldArbitrary,
-                fc.stringOf( fc.constantFrom( '/', '?', '=', '&', '#', '%', '+', ' ' ), { minLength: 1, maxLength: 10 } ),
+                stringOf( fc.constantFrom( '/', '?', '=', '&', '#', '%', '+', ' ' ), { minLength: 1, maxLength: 10 } ),
                 async ( protocol, domain, tld, specialChars ) => {
                     const targetUrl = protocol + domain + tld + '/path' + specialChars;
                     const result = simulateNavigationInterception( targetUrl, [ domain + tld ] );
@@ -410,7 +411,7 @@ describe( 'Feature: url-blocker, Property 10: Non-Blocked URL Pass-Through', () 
                 protocolArbitrary,
                 domainNameArbitrary,
                 tldArbitrary,
-                fc.stringOf( fc.constantFrom( '/', '?', '=', '&', '#', '%', '+' ), { minLength: 1, maxLength: 10 } ),
+                stringOf( fc.constantFrom( '/', '?', '=', '&', '#', '%', '+' ), { minLength: 1, maxLength: 10 } ),
                 async ( protocol, domain, tld, specialChars ) => {
                     const targetUrl = protocol + domain + tld + '/path' + specialChars;
                     const blockedUrls = [ 'completely-different-site.xyz' ];
@@ -430,7 +431,7 @@ describe( 'Feature: url-blocker, Property 10: Non-Blocked URL Pass-Through', () 
                 protocolArbitrary,
                 domainNameArbitrary,
                 tldArbitrary,
-                fc.stringOf(
+                stringOf(
                     fc.constantFrom( 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', '/', '-', '_', '0', '1', '2', '3', '4', '5' ),
                     { minLength: 50, maxLength: 200 }
                 ),

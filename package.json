@@ -11,8 +11,8 @@
     "author": "",
     "license": "ISC",
     "devDependencies": {
-        "jest": "^29.7.0",
-        "fast-check": "^3.15.0",
-        "jest-environment-jsdom": "^29.7.0"
+        "jest": "30.4.1",
+        "fast-check": "4.7.0",
+        "jest-environment-jsdom": "30.4.1"
     }
 }

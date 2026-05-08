@@ -6,7 +6,8 @@ const {
     domainNameArbitrary,
     tldArbitrary,
     urlPathArbitrary,
-    queryParamArbitrary
+    queryParamArbitrary,
+    stringOf
 } = require( '../helpers/generators' );
 const {
     setupBlockedPageDOM,
@@ -191,7 +192,7 @@ describe( 'Feature: url-blocker, Property 11: Blocked Page Content Display', () 
                 protocolArbitrary,
                 domainNameArbitrary,
                 tldArbitrary,
-                fc.stringOf(
+                stringOf(
                     fc.constantFrom( '/', '-', '_', '.', '~' ),
                     { minLength: 1, maxLength: 10 }
                 ),
@@ -264,7 +265,7 @@ describe( 'Feature: url-blocker, Property 11: Blocked Page Content Display', () 
                 protocolArbitrary,
                 domainNameArbitrary,
                 tldArbitrary,
-                fc.stringOf(
+                stringOf(
                     fc.constantFrom(
                         'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
                         '/', '-', '_'

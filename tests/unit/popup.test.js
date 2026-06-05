@@ -2,6 +2,7 @@ const {
     showError,
     clearError,
     blockUrl,
+    captureFullPageScreenshot,
     getCurrentUrl,
     openSettings
 } = require( '../../src/popup' );
@@ -9,6 +10,8 @@ const {
 describe( 'Popup UI Module', () => {
     let urlInput;
     let blockButton;
+    let screenshotButton;
+    let screenshotStatus;
     let errorMessage;
     let settingsLink;
 
@@ -21,6 +24,13 @@ describe( 'Popup UI Module', () => {
         blockButton.id = 'block-button';
         blockButton.textContent = 'Block Site';
 
+        screenshotButton = document.createElement( 'button' );
+        screenshotButton.id = 'screenshot-button';
+        screenshotButton.textContent = 'Capture Full Page';
+
+        screenshotStatus = document.createElement( 'p' );
+        screenshotStatus.id = 'screenshot-status';
+
         errorMessage = document.createElement( 'div' );
         errorMessage.id = 'error-message';
         errorMessage.className = 'error-message';
@@ -31,6 +41,8 @@ describe( 'Popup UI Module', () => {
 
         document.body.appendChild( urlInput );
         document.body.appendChild( blockButton );
+        document.body.appendChild( screenshotButton );
+        document.body.appendChild( screenshotStatus );
         document.body.appendChild( errorMessage );
         document.body.appendChild( settingsLink );
     }
@@ -171,6 +183,44 @@ describe( 'Popup UI Module', () => {
             await getCurrentUrl();
 
             expect( errorMessage.textContent ).toBe( 'Could not get current tab URL' );
+        } );
+    } );
+
+    describe( 'Full Page Screenshot Functionality', () => {
+        it( 'should send screenshot message to service worker', async () => {
+            chrome.runtime.sendMessage.mockResolvedValue( {
+                success: true
+            } );
+
+            await captureFullPageScreenshot();
+
+            expect( chrome.runtime.sendMessage ).toHaveBeenCalledWith( {
+                type: 'captureFullPageScreenshot'
+            } );
+        } );
+
+        it( 'should show status when screenshot succeeds', async () => {
+            chrome.runtime.sendMessage.mockResolvedValue( {
+                success: true
+            } );
+
+            await captureFullPageScreenshot();
+
+            expect( screenshotStatus.textContent ).toBe( 'Screenshot opened for review.' );
+            expect( screenshotButton.disabled ).toBe( false );
+        } );
+
+        it( 'should show service worker error when screenshot fails', async () => {
+            chrome.runtime.sendMessage.mockResolvedValue( {
+                success: false,
+                error: 'Cannot capture browser pages'
+            } );
+
+            await captureFullPageScreenshot();
+
+            expect( errorMessage.textContent ).toBe( 'Cannot capture browser pages' );
+            expect( errorMessage.classList.contains( 'visible' ) ).toBe( true );
+            expect( screenshotButton.disabled ).toBe( false );
         } );
     } );
 

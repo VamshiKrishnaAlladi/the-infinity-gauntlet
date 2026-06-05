@@ -6,7 +6,11 @@
     "permissions": [
         "storage",
         "webNavigation",
-        "tabs"
+        "tabs",
+        "activeTab",
+        "scripting",
+        "downloads",
+        "offscreen"
     ],
     "background": {
         "service_worker": "src/service-worker.js"

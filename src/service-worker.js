@@ -1,9 +1,26 @@
 const STORAGE_KEY = 'blockedUrls';
 const INTERNAL_URL_PREFIXES = [ 'chrome://', 'chrome-extension://', 'about:' ];
+const SCREENSHOT_OFFSCREEN_URL = 'src/screenshot-stitcher.html';
+const SCREENSHOT_CAPTURE_DELAY_MS = 700;
+const SCREENSHOT_TILE_OVERLAP_PX = 600;
+const MAX_SCREENSHOT_DIMENSION = 32767;
+const MAX_SCREENSHOT_AREA = 120000000;
+const SCREENSHOT_REVIEW_PAGE = 'src/screenshot-review.html';
 let blockedUrlsCache = [];
 let bypassCache = {};
 let bypassCheckInterval = null;
 let badgeUpdateInterval = null;
+const reviewTabScreenshotIds = {};
+let screenshotStore = typeof globalThis !== 'undefined' ? globalThis.InfinityGauntletScreenshotStore : undefined;
+
+if ( !screenshotStore && typeof importScripts === 'function' ) {
+    importScripts( 'screenshot-store.js' );
+    screenshotStore = globalThis.InfinityGauntletScreenshotStore;
+}
+
+if ( !screenshotStore && typeof require !== 'undefined' ) {
+    screenshotStore = require( './screenshot-store' );
+}
 
 function isInternalUrl( url ) {
     return typeof url === 'string' && INTERNAL_URL_PREFIXES.some( prefix => url.startsWith( prefix ) );
@@ -209,6 +226,497 @@ async function unblockMatchingTabs( remainingBlockedUrls ) {
     }
 }
 
+function wait( ms ) {
+    return new Promise( resolve => setTimeout( resolve, ms ) );
+}
+
+function padDatePart( value ) {
+    return value.toString().padStart( 2, '0' );
+}
+
+function getLocalTimestampPrefix( date = new Date() ) {
+    const year = date.getFullYear();
+    const month = padDatePart( date.getMonth() + 1 );
+    const day = padDatePart( date.getDate() );
+    const hours = padDatePart( date.getHours() );
+    const minutes = padDatePart( date.getMinutes() );
+    const seconds = padDatePart( date.getSeconds() );
+
+    return `${year}-${month}-${day} ${hours}-${minutes}-${seconds}`;
+}
+
+function sanitizeFilenamePart( value ) {
+    return ( value || 'Untitled Page' )
+        .replace( /[<>:"/\\|?*\u0000-\u001F]/g, ' ' )
+        .replace( /\s+/g, ' ' )
+        .trim()
+        .slice( 0, 120 ) || 'Untitled Page';
+}
+
+function getScreenshotFilename( title, date = new Date() ) {
+    const timestamp = getLocalTimestampPrefix( date );
+    const pageTitle = sanitizeFilenamePart( title );
+    return `[${timestamp}] ${pageTitle}.png`;
+}
+
+function buildScrollPositions( scrollHeight, viewportHeight ) {
+    if ( scrollHeight <= viewportHeight ) return [ 0 ];
+
+    const maxScrollY = Math.max( 0, scrollHeight - viewportHeight );
+    const overlap = Math.min( SCREENSHOT_TILE_OVERLAP_PX, Math.floor( viewportHeight * 0.5 ) );
+    const step = Math.max( 1, viewportHeight - overlap );
+    const positions = [];
+
+    for ( let y = 0; y < maxScrollY; y += step ) {
+        positions.push( y );
+    }
+
+    positions.push( maxScrollY );
+    return [ ...new Set( positions ) ];
+}
+
+async function executeInTab( tabId, func, args = [] ) {
+    const [ result ] = await chrome.scripting.executeScript( {
+        target: { tabId },
+        func,
+        args
+    } );
+
+    return result?.result;
+}
+
+async function executeInAllFrames( tabId, func, args = [] ) {
+    try {
+        return await chrome.scripting.executeScript( {
+            target: {
+                tabId,
+                allFrames: true
+            },
+            func,
+            args
+        } );
+    } catch ( error ) {
+        console.error( 'Service Worker: Error injecting screenshot helper in all frames:', error );
+        return chrome.scripting.executeScript( {
+            target: { tabId },
+            func,
+            args
+        } );
+    }
+}
+
+function getScreenshotPageMetrics() {
+    function getScrollElementScore( element ) {
+        const scrollHeight = element.scrollHeight || 0;
+        const clientHeight = element.clientHeight || 0;
+        const scrollableHeight = scrollHeight - clientHeight;
+        if ( scrollableHeight < 8 ) return 0;
+
+        if ( element === document.documentElement || element === document.body || element === document.scrollingElement ) {
+            return scrollableHeight * window.innerWidth;
+        }
+
+        const style = window.getComputedStyle( element );
+        const overflowY = style.overflowY;
+        const canScroll = overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay';
+        if ( !canScroll ) return 0;
+
+        const rect = element.getBoundingClientRect();
+        const visibleWidth = Math.max( 0, Math.min( rect.right, window.innerWidth ) - Math.max( rect.left, 0 ) );
+        const visibleHeight = Math.max( 0, Math.min( rect.bottom, window.innerHeight ) - Math.max( rect.top, 0 ) );
+        const visibleArea = visibleWidth * visibleHeight;
+        if ( visibleArea < window.innerWidth * window.innerHeight * 0.2 ) return 0;
+
+        return scrollableHeight * visibleArea;
+    }
+
+    function getScrollElement() {
+        const scrollingElement = document.scrollingElement || document.documentElement;
+        const candidates = [
+            scrollingElement,
+            document.documentElement,
+            document.body,
+            ...Array.from( document.body?.querySelectorAll( '*' ) || [] )
+        ].filter( Boolean );
+
+        let bestElement = scrollingElement;
+        let bestScore = getScrollElementScore( scrollingElement );
+
+        for ( const element of candidates ) {
+            const score = getScrollElementScore( element );
+            if ( score > bestScore ) {
+                bestScore = score;
+                bestElement = element;
+            }
+        }
+
+        return bestElement;
+    }
+
+    const scrollElement = getScrollElement();
+    const isWindowScroll = scrollElement === document.documentElement || scrollElement === document.body;
+    const rect = scrollElement.getBoundingClientRect();
+    const scrollContainerTop = isWindowScroll ? 0 : Math.max( 0, rect.top );
+    const scrollContainerBottom = isWindowScroll ? window.innerHeight : Math.min( window.innerHeight, rect.bottom );
+    const scrollContainerLeft = isWindowScroll ? 0 : Math.max( 0, rect.left );
+    const scrollContainerRight = isWindowScroll ? window.innerWidth : Math.min( window.innerWidth, rect.right );
+    const captureViewportHeight = isWindowScroll
+        ? window.innerHeight
+        : Math.max( 1, Math.min( scrollElement.clientHeight, scrollContainerBottom - scrollContainerTop ) );
+    const captureScrollHeight = isWindowScroll
+        ? Math.max( document.documentElement.scrollHeight, document.body?.scrollHeight || 0, window.innerHeight )
+        : scrollElement.scrollHeight;
+    const scrollWidth = Math.max(
+        scrollElement.scrollWidth,
+        document.documentElement.scrollWidth,
+        document.body?.scrollWidth || 0,
+        window.innerWidth
+    );
+    const outputHeight = isWindowScroll
+        ? captureScrollHeight
+        : Math.ceil( scrollContainerTop + captureScrollHeight + Math.max( 0, window.innerHeight - scrollContainerBottom ) );
+
+    return {
+        scrollWidth,
+        scrollHeight: outputHeight,
+        captureScrollHeight,
+        captureViewportHeight,
+        scrollContainerTop,
+        scrollContainerBottom,
+        scrollContainerLeft,
+        scrollContainerRight,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        scrollX: isWindowScroll ? window.scrollX : scrollElement.scrollLeft,
+        scrollY: isWindowScroll ? window.scrollY : scrollElement.scrollTop,
+        devicePixelRatio: window.devicePixelRatio || 1,
+        usesElementScroll: !isWindowScroll,
+        title: document.title || 'page'
+    };
+}
+
+function scrollPageForScreenshot( x, y ) {
+    function getScrollElementScore( element ) {
+        const scrollHeight = element.scrollHeight || 0;
+        const clientHeight = element.clientHeight || 0;
+        const scrollableHeight = scrollHeight - clientHeight;
+        if ( scrollableHeight < 8 ) return 0;
+
+        if ( element === document.documentElement || element === document.body || element === document.scrollingElement ) {
+            return scrollableHeight * window.innerWidth;
+        }
+
+        const style = window.getComputedStyle( element );
+        const overflowY = style.overflowY;
+        const canScroll = overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay';
+        if ( !canScroll ) return 0;
+
+        const rect = element.getBoundingClientRect();
+        const visibleWidth = Math.max( 0, Math.min( rect.right, window.innerWidth ) - Math.max( rect.left, 0 ) );
+        const visibleHeight = Math.max( 0, Math.min( rect.bottom, window.innerHeight ) - Math.max( rect.top, 0 ) );
+        const visibleArea = visibleWidth * visibleHeight;
+        if ( visibleArea < window.innerWidth * window.innerHeight * 0.2 ) return 0;
+
+        return scrollableHeight * visibleArea;
+    }
+
+    function getScrollElement() {
+        const scrollingElement = document.scrollingElement || document.documentElement;
+        const candidates = [
+            scrollingElement,
+            document.documentElement,
+            document.body,
+            ...Array.from( document.body?.querySelectorAll( '*' ) || [] )
+        ].filter( Boolean );
+
+        let bestElement = scrollingElement;
+        let bestScore = getScrollElementScore( scrollingElement );
+
+        for ( const element of candidates ) {
+            const score = getScrollElementScore( element );
+            if ( score > bestScore ) {
+                bestScore = score;
+                bestElement = element;
+            }
+        }
+
+        return bestElement;
+    }
+
+    const scrollElement = getScrollElement();
+    const isWindowScroll = scrollElement === document.documentElement || scrollElement === document.body;
+
+    if ( isWindowScroll ) {
+        window.scrollTo( x, y );
+    } else {
+        scrollElement.scrollLeft = x;
+        scrollElement.scrollTop = y;
+    }
+
+    return {
+        scrollX: isWindowScroll ? window.scrollX : scrollElement.scrollLeft,
+        scrollY: isWindowScroll ? window.scrollY : scrollElement.scrollTop
+    };
+}
+
+function prepareStickyElementsForScreenshot() {
+    window.__infinityGauntletScreenshot = {
+        trackedElements: [],
+        trackedElementSet: new Set()
+    };
+
+    return { prepared: true };
+}
+
+function setStickyElementsForScreenshot( mode ) {
+    const state = window.__infinityGauntletScreenshot;
+    if ( !state ) return { normalizedCount: 0 };
+
+    const edgeThreshold = 16;
+    const allElements = [
+        document.documentElement,
+        document.body,
+        ...Array.from( document.body?.querySelectorAll( '*' ) || [] )
+    ].filter( Boolean );
+
+    function rememberElement( element ) {
+        if ( state.trackedElementSet.has( element ) ) return;
+
+        state.trackedElementSet.add( element );
+        state.trackedElements.push( {
+            element,
+            styles: {
+                position: element.style.getPropertyValue( 'position' ),
+                top: element.style.getPropertyValue( 'top' ),
+                right: element.style.getPropertyValue( 'right' ),
+                bottom: element.style.getPropertyValue( 'bottom' ),
+                left: element.style.getPropertyValue( 'left' ),
+                width: element.style.getPropertyValue( 'width' ),
+                height: element.style.getPropertyValue( 'height' )
+            },
+            priorities: {
+                position: element.style.getPropertyPriority( 'position' ),
+                top: element.style.getPropertyPriority( 'top' ),
+                right: element.style.getPropertyPriority( 'right' ),
+                bottom: element.style.getPropertyPriority( 'bottom' ),
+                left: element.style.getPropertyPriority( 'left' ),
+                width: element.style.getPropertyPriority( 'width' ),
+                height: element.style.getPropertyPriority( 'height' )
+            }
+        } );
+    }
+
+    for ( const element of allElements ) {
+        const style = window.getComputedStyle( element );
+        if ( style.position !== 'fixed' && style.position !== 'sticky' ) continue;
+        if ( style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' ) continue;
+
+        const rect = element.getBoundingClientRect();
+        if ( rect.width < 40 || rect.height < 20 ) continue;
+
+        const isBottomPinned = window.innerHeight - rect.bottom <= edgeThreshold && rect.top < window.innerHeight - edgeThreshold;
+        const isWideFooter = isBottomPinned && rect.width >= window.innerWidth * 0.4;
+        rememberElement( element );
+
+        if ( style.position === 'sticky' ) {
+            element.style.setProperty( 'position', 'relative', 'important' );
+            element.style.setProperty( 'top', 'auto', 'important' );
+            element.style.setProperty( 'right', 'auto', 'important' );
+            element.style.setProperty( 'bottom', 'auto', 'important' );
+            element.style.setProperty( 'left', 'auto', 'important' );
+            continue;
+        }
+
+        const documentTop = isWideFooter
+            ? Math.max( 0, document.documentElement.scrollHeight - rect.height )
+            : window.scrollY + rect.top;
+        const documentLeft = window.scrollX + rect.left;
+
+        element.style.setProperty( 'position', 'absolute', 'important' );
+        element.style.setProperty( 'top', `${documentTop}px`, 'important' );
+        element.style.setProperty( 'left', `${documentLeft}px`, 'important' );
+        element.style.setProperty( 'right', 'auto', 'important' );
+        element.style.setProperty( 'bottom', 'auto', 'important' );
+        element.style.setProperty( 'width', `${rect.width}px`, 'important' );
+        element.style.setProperty( 'height', `${rect.height}px`, 'important' );
+    }
+
+    return { normalizedCount: state.trackedElements.length };
+}
+
+function restoreStickyElementsForScreenshot() {
+    const state = window.__infinityGauntletScreenshot;
+    if ( !state ) return { restoredCount: 0 };
+
+    for ( const item of state.trackedElements ) {
+        for ( const [ property, value ] of Object.entries( item.styles ) ) {
+            item.element.style.setProperty( property, value, item.priorities[ property ] );
+        }
+    }
+
+    const restoredCount = state.trackedElements.length;
+    delete window.__infinityGauntletScreenshot;
+    return { restoredCount };
+}
+
+function validateScreenshotDimensions( metrics ) {
+    if (
+        metrics.scrollWidth > MAX_SCREENSHOT_DIMENSION ||
+        metrics.scrollHeight > MAX_SCREENSHOT_DIMENSION ||
+        metrics.scrollWidth * metrics.scrollHeight > MAX_SCREENSHOT_AREA
+    ) {
+        throw new Error( 'Page is too large to capture as a single screenshot' );
+    }
+}
+
+async function getActiveCaptureTab() {
+    const [ tab ] = await chrome.tabs.query( { active: true, currentWindow: true } );
+
+    if ( typeof tab?.id !== 'number' || typeof tab?.windowId !== 'number' || !tab?.url ) {
+        throw new Error( 'Could not get current tab' );
+    }
+
+    if ( isInternalUrl( tab.url ) ) {
+        throw new Error( 'Cannot capture browser pages' );
+    }
+
+    return tab;
+}
+
+async function ensureScreenshotOffscreenDocument() {
+    const offscreenUrl = chrome.runtime.getURL( SCREENSHOT_OFFSCREEN_URL );
+
+    if ( chrome.runtime.getContexts ) {
+        const contexts = await chrome.runtime.getContexts( {
+            contextTypes: [ 'OFFSCREEN_DOCUMENT' ],
+            documentUrls: [ offscreenUrl ]
+        } );
+
+        if ( contexts.length > 0 ) return;
+    }
+
+    try {
+        await chrome.offscreen.createDocument( {
+            url: SCREENSHOT_OFFSCREEN_URL,
+            reasons: [ 'BLOBS' ],
+            justification: 'Stitch scrolling screenshot tiles into one PNG image.'
+        } );
+    } catch ( error ) {
+        if ( !error?.message?.includes( 'Only a single offscreen document' ) ) throw error;
+    }
+}
+
+async function stitchScreenshotTiles( payload ) {
+    await ensureScreenshotOffscreenDocument();
+    const response = await chrome.runtime.sendMessage( {
+        type: 'stitchScreenshotTiles',
+        payload
+    } );
+
+    if ( !response?.success ) {
+        throw new Error( response?.error || 'Failed to stitch screenshot' );
+    }
+
+    return response.dataUrl;
+}
+
+async function downloadScreenshot( dataUrl, title ) {
+    return chrome.downloads.download( {
+        url: dataUrl,
+        filename: getScreenshotFilename( title ),
+        saveAs: false
+    } );
+}
+
+async function openScreenshotReviewTab( sourceTab, screenshotId ) {
+    const createProperties = {
+        url: chrome.runtime.getURL( `${SCREENSHOT_REVIEW_PAGE}?id=${encodeURIComponent( screenshotId )}` ),
+        active: true,
+        windowId: sourceTab.windowId
+    };
+
+    if ( typeof sourceTab.index === 'number' ) {
+        createProperties.index = sourceTab.index + 1;
+    }
+
+    const reviewTab = await chrome.tabs.create( createProperties );
+    if ( typeof reviewTab?.id === 'number' ) {
+        reviewTabScreenshotIds[ reviewTab.id ] = screenshotId;
+    }
+    return reviewTab;
+}
+
+async function storeScreenshotForReview( dataUrl, title ) {
+    await screenshotStore.deleteStaleTemporaryScreenshots();
+    const record = await screenshotStore.putTemporaryScreenshot( {
+        dataUrl,
+        title
+    } );
+    return record.id;
+}
+
+async function captureFullPageScreenshot() {
+    const tab = await getActiveCaptureTab();
+    const metrics = await executeInTab( tab.id, getScreenshotPageMetrics );
+    validateScreenshotDimensions( metrics );
+
+    const scrollPositions = buildScrollPositions(
+        metrics.captureScrollHeight || metrics.scrollHeight,
+        metrics.captureViewportHeight || metrics.viewportHeight
+    );
+    const tiles = [];
+
+    try {
+        await executeInTab( tab.id, scrollPageForScreenshot, [ 0, 0 ] );
+        await wait( SCREENSHOT_CAPTURE_DELAY_MS );
+        await executeInAllFrames( tab.id, prepareStickyElementsForScreenshot );
+
+        for ( let index = 0; index < scrollPositions.length; index++ ) {
+            const y = scrollPositions[ index ];
+            const mode = scrollPositions.length === 1
+                ? 'single'
+                : index === 0
+                ? 'first'
+                : index === scrollPositions.length - 1
+                    ? 'last'
+                    : 'middle';
+
+            const scrollResult = await executeInTab( tab.id, scrollPageForScreenshot, [ 0, y ] );
+            await executeInAllFrames( tab.id, setStickyElementsForScreenshot, [ mode ] );
+            await wait( SCREENSHOT_CAPTURE_DELAY_MS );
+
+            const dataUrl = await chrome.tabs.captureVisibleTab( tab.windowId, { format: 'png' } );
+            tiles.push( {
+                dataUrl,
+                x: scrollResult?.scrollX || 0,
+                y: scrollResult?.scrollY || y,
+                mode
+            } );
+        }
+    } finally {
+        try {
+            await executeInAllFrames( tab.id, restoreStickyElementsForScreenshot );
+            await executeInTab( tab.id, scrollPageForScreenshot, [ metrics.scrollX, metrics.scrollY ] );
+        } catch ( error ) {
+            console.error( 'Service Worker: Error restoring page after screenshot:', error );
+        }
+    }
+
+    const dataUrl = await stitchScreenshotTiles( {
+        metrics,
+        tiles
+    } );
+    const screenshotId = await storeScreenshotForReview( dataUrl, metrics.title );
+    const reviewTab = await openScreenshotReviewTab( tab, screenshotId );
+
+    return {
+        success: true,
+        screenshotId,
+        reviewTabId: reviewTab?.id,
+        tileCount: tiles.length
+    };
+}
+
 chrome.runtime.onMessage.addListener( ( message, sender, sendResponse ) => {
     handleMessage( message )
         .then( sendResponse )
@@ -255,6 +763,9 @@ async function handleMessage( message ) {
         case 'addBypass':
             return { success: addBypass( url, duration || 10 * 60 * 1000 ) };
 
+        case 'captureFullPageScreenshot':
+            return captureFullPageScreenshot();
+
         default:
             return { success: false, error: `Unknown message type: ${type}` };
     }
@@ -280,7 +791,20 @@ chrome.webNavigation.onBeforeNavigate.addListener( async ( details ) => {
     }
 } );
 
+if ( chrome.tabs?.onRemoved ) {
+    chrome.tabs.onRemoved.addListener( tabId => {
+        const screenshotId = reviewTabScreenshotIds[ tabId ];
+        if ( !screenshotId ) return;
+
+        delete reviewTabScreenshotIds[ tabId ];
+        screenshotStore.deleteTemporaryScreenshot( screenshotId ).catch( error => {
+            console.error( 'Service Worker: Error deleting temporary screenshot after review tab close:', error );
+        } );
+    } );
+}
+
 async function initialize() {
+    await screenshotStore.deleteStaleTemporaryScreenshots();
     await getBlockedUrls();
 }
 
@@ -308,6 +832,17 @@ if ( typeof module !== 'undefined' && module.exports ) {
         updateBadge,
         startBadgeUpdate,
         stopBadgeUpdate,
+        buildScrollPositions,
+        getScreenshotFilename,
+        captureFullPageScreenshot,
+        storeScreenshotForReview,
+        openScreenshotReviewTab,
+        downloadScreenshot,
+        getReviewTabScreenshotIds: () => ( { ...reviewTabScreenshotIds } ),
+        getScreenshotPageMetrics,
+        prepareStickyElementsForScreenshot,
+        setStickyElementsForScreenshot,
+        restoreStickyElementsForScreenshot,
         getBypassCache: () => bypassCache,
         resetBypassCache: () => { bypassCache = {}; },
         getBlockedUrlsCache: () => [ ...blockedUrlsCache ],

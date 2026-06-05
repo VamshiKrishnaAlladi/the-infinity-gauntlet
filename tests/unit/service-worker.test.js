@@ -2,8 +2,13 @@ const {
     getBlockedUrls,
     saveBlockedUrls,
     handleMessage,
-    initialize
+    initialize,
+    buildScrollPositions,
+    getScreenshotFilename
 } = require( '../../src/service-worker' );
+const {
+    getTemporaryScreenshot
+} = require( '../../src/screenshot-store' );
 
 describe( 'Service Worker Module', () => {
     beforeEach( () => {
@@ -197,6 +202,115 @@ describe( 'Service Worker Module', () => {
                 expect( response.success ).toBe( false );
                 expect( response.error ).toBe( 'Unknown message type: undefined' );
             } );
+        } );
+
+        describe( 'captureFullPageScreenshot message', () => {
+            function mockScreenshotExecution( metricsOverride = {} ) {
+                const metrics = {
+                    scrollWidth: 800,
+                    scrollHeight: 1000,
+                    captureScrollHeight: 1000,
+                    captureViewportHeight: 500,
+                    scrollContainerTop: 0,
+                    scrollContainerBottom: 500,
+                    scrollContainerLeft: 0,
+                    scrollContainerRight: 800,
+                    viewportWidth: 800,
+                    viewportHeight: 500,
+                    scrollX: 0,
+                    scrollY: 0,
+                    devicePixelRatio: 1,
+                    usesElementScroll: false,
+                    title: 'Test Page',
+                    ...metricsOverride
+                };
+
+                chrome.tabs.query.mockResolvedValue( [
+                    { id: 123, windowId: 456, index: 4, url: 'https://example.com/page' }
+                ] );
+                chrome.scripting.executeScript.mockImplementation( async ( { func, args = [] } ) => {
+                    if ( func.name === 'getScreenshotPageMetrics' ) {
+                        return [ { result: metrics } ];
+                    }
+                    if ( func.name === 'scrollPageForScreenshot' ) {
+                        return [ {
+                            result: {
+                                scrollX: args[ 0 ] || 0,
+                                scrollY: args[ 1 ] || 0
+                            }
+                        } ];
+                    }
+                    return [ { result: {} } ];
+                } );
+                chrome.tabs.captureVisibleTab.mockResolvedValue( 'data:image/png;base64,tile' );
+                chrome.runtime.getContexts.mockResolvedValue( [] );
+                chrome.offscreen.createDocument.mockResolvedValue( undefined );
+                chrome.runtime.sendMessage.mockResolvedValue( {
+                    success: true,
+                    dataUrl: 'data:image/png;base64,stitched'
+                } );
+                chrome.tabs.create.mockResolvedValue( { id: 789 } );
+            }
+
+            it( 'should capture, stitch, store, and open screenshot review tab', async () => {
+                mockScreenshotExecution();
+
+                const response = await handleMessage( { type: 'captureFullPageScreenshot' } );
+
+                expect( response ).toEqual( expect.objectContaining( {
+                    success: true,
+                    screenshotId: expect.any( String ),
+                    reviewTabId: 789,
+                    tileCount: 3
+                } ) );
+                expect( chrome.tabs.captureVisibleTab ).toHaveBeenCalledTimes( 3 );
+                expect( chrome.runtime.sendMessage ).toHaveBeenCalledWith( {
+                    type: 'stitchScreenshotTiles',
+                    payload: expect.objectContaining( {
+                        tiles: expect.any( Array ),
+                        metrics: expect.objectContaining( {
+                            scrollHeight: 1000
+                        } )
+                    } )
+                } );
+                expect( chrome.downloads.download ).not.toHaveBeenCalled();
+                expect( chrome.tabs.create ).toHaveBeenCalledWith( expect.objectContaining( {
+                    url: expect.stringContaining( `src/screenshot-review.html?id=${encodeURIComponent( response.screenshotId )}` ),
+                    active: true,
+                    windowId: 456,
+                    index: 5
+                } ) );
+
+                await expect( getTemporaryScreenshot( response.screenshotId ) )
+                    .resolves.toEqual( expect.objectContaining( {
+                        dataUrl: 'data:image/png;base64,stitched',
+                        title: 'Test Page'
+                    } ) );
+            } );
+
+            it( 'should reject browser pages before capture', async () => {
+                chrome.tabs.query.mockResolvedValue( [
+                    { id: 123, windowId: 456, url: 'chrome://extensions' }
+                ] );
+
+                await expect( handleMessage( { type: 'captureFullPageScreenshot' } ) )
+                    .rejects.toThrow( 'Cannot capture browser pages' );
+                expect( chrome.tabs.captureVisibleTab ).not.toHaveBeenCalled();
+            } );
+
+            it( 'should build overlapping scroll positions for tall pages', () => {
+                expect( buildScrollPositions( 1000, 500 ) ).toEqual( [ 0, 250, 500 ] );
+            } );
+
+            it( 'should build screenshot filenames with local timestamp prefix and sanitized title', () => {
+                const filename = getScreenshotFilename(
+                    'Backup: Cluster/Prod?*',
+                    new Date( 2026, 4, 25, 11, 26, 7 )
+                );
+
+                expect( filename ).toBe( '[2026-05-25 11-26-07] Backup Cluster Prod.png' );
+            } );
+
         } );
     } );
 

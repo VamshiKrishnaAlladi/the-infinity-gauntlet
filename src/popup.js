@@ -2,6 +2,7 @@ const { sendMessageWithRetry } = window.URLBlockerUI;
 
 const INTERNAL_URL_PREFIXES = [ 'chrome://', 'chrome-extension://', 'about:' ];
 const DEFAULT_BUTTON_TEXT = 'Block Site';
+const DEFAULT_SCREENSHOT_BUTTON_TEXT = 'Capture Full Page';
 
 function showError( message ) {
     const errorDiv = document.getElementById( 'error-message' );
@@ -25,6 +26,17 @@ function setBlockButtonState( blockButton, { disabled, text, color = '' } ) {
     blockButton.disabled = disabled;
     blockButton.textContent = text;
     blockButton.style.backgroundColor = color;
+}
+
+function setScreenshotStatus( message ) {
+    const status = document.getElementById( 'screenshot-status' );
+    if ( status ) status.textContent = message || '';
+}
+
+function setScreenshotButtonState( screenshotButton, { disabled, text } ) {
+    if ( !screenshotButton ) return;
+    screenshotButton.disabled = disabled;
+    screenshotButton.textContent = text;
 }
 
 async function getCurrentUrl() {
@@ -91,6 +103,42 @@ async function blockUrl() {
     }
 }
 
+async function captureFullPageScreenshot() {
+    const screenshotButton = document.getElementById( 'screenshot-button' );
+    setScreenshotButtonState( screenshotButton, {
+        disabled: true,
+        text: 'Capturing...'
+    } );
+    setScreenshotStatus( 'Scrolling page and preparing screenshot...' );
+    clearError();
+
+    try {
+        const response = await sendMessageWithRetry( {
+            type: 'captureFullPageScreenshot'
+        } );
+
+        if ( response?.success ) {
+            setScreenshotStatus( 'Screenshot opened for review.' );
+            setTimeout( () => setScreenshotStatus( '' ), 2500 );
+            return response;
+        }
+
+        showError( response?.error || 'Failed to capture screenshot' );
+        setScreenshotStatus( '' );
+        return response;
+    } catch ( error ) {
+        console.error( 'Failed to capture screenshot:', error );
+        showError( 'Failed to capture screenshot' );
+        setScreenshotStatus( '' );
+        return { success: false, error: error.message };
+    } finally {
+        setScreenshotButtonState( screenshotButton, {
+            disabled: false,
+            text: DEFAULT_SCREENSHOT_BUTTON_TEXT
+        } );
+    }
+}
+
 function openSettings() {
     chrome.tabs.create( { url: chrome.runtime.getURL( 'src/settings.html' ) } );
     window.close();
@@ -99,6 +147,9 @@ function openSettings() {
 function setupEventListeners() {
     const blockButton = document.getElementById( 'block-button' );
     if ( blockButton ) blockButton.addEventListener( 'click', blockUrl );
+
+    const screenshotButton = document.getElementById( 'screenshot-button' );
+    if ( screenshotButton ) screenshotButton.addEventListener( 'click', captureFullPageScreenshot );
 
     const settingsLink = document.getElementById( 'settings-link' );
     if ( settingsLink ) {
@@ -125,6 +176,7 @@ document.addEventListener( 'DOMContentLoaded', () => {
 if ( typeof module !== 'undefined' && module.exports ) {
     module.exports = {
         blockUrl,
+        captureFullPageScreenshot,
         getCurrentUrl,
         openSettings,
         showError,

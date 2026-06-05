@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Screenshot Review - The Infinity Gauntlet</title>
+        <link rel="stylesheet" href="screenshot-review.css">
+    </head>
+
+    <body>
+        <header class="review-toolbar">
+            <div class="toolbar-group title-group">
+                <strong>Screenshot Review</strong>
+                <span id="review-title" class="review-title" tabindex="0" role="button" aria-label="Edit screenshot title" title="Click to edit screenshot title"></span>
+                <input id="review-title-input" class="review-title-input hidden" type="text" aria-label="Screenshot title">
+            </div>
+
+            <div class="toolbar-group">
+                <div class="split-button" id="redact-split-button">
+                    <button class="tool-button icon-button split-main active" data-tool="redact" id="redact-tool" aria-label="Redact" title="Redact">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M4 7h16v10H4z" />
+                            <path d="M7 10h10M7 14h7" />
+                        </svg>
+                    </button>
+                    <button class="tool-button icon-button split-toggle" id="redact-mode-toggle" aria-label="Choose redaction mode" title="Choose redaction mode" aria-haspopup="menu" aria-expanded="false">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M7 10l5 5l5-5" />
+                        </svg>
+                    </button>
+                    <div class="redact-menu hidden" id="redact-mode-menu" role="menu">
+                        <button class="redact-menu-item active" data-redact-mode="mosaic" role="menuitem">Mosaic</button>
+                        <button class="redact-menu-item" data-redact-mode="blur" role="menuitem">Blur</button>
+                    </div>
+                </div>
+                <span id="blur-warning" class="redact-info hidden" tabindex="0" role="img" aria-label="Mosaic is safer for sensitive text." title="Mosaic is safer for sensitive text.">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M12 10v6" />
+                        <path d="M12 7h.01" />
+                    </svg>
+                </span>
+                <button class="tool-button icon-button" data-tool="highlight" aria-label="Highlight" title="Highlight">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M5 19h14" />
+                        <path d="M7 15l8-8l3 3l-8 8H7z" />
+                    </svg>
+                </button>
+                <button class="tool-button icon-button" data-tool="pen" aria-label="Pen" title="Pen">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 20l4-1l10-10l-3-3L5 16z" />
+                        <path d="M13 8l3 3" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="toolbar-separator" aria-hidden="true"></div>
+
+            <div class="toolbar-group history-group">
+                <button id="undo-button" class="tool-button icon-button history-button" aria-label="Undo" title="Undo" disabled>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M9 7L4 12L9 17" />
+                        <path d="M5 12H15C18 12 20 14 20 17C20 19 19 20 18 21" />
+                    </svg>
+                </button>
+                <button id="redo-button" class="tool-button icon-button history-button" aria-label="Redo" title="Redo" disabled>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M15 7L20 12L15 17" />
+                        <path d="M19 12H9C6 12 4 14 4 17C4 19 5 20 6 21" />
+                    </svg>
+                </button>
+                <button id="reset-button" class="tool-button icon-button history-button" aria-label="Reset" title="Reset">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 4v6h6" />
+                        <path d="M20 20v-6h-6" />
+                        <path d="M5 10a7 7 0 0 1 12-4" />
+                        <path d="M19 14a7 7 0 0 1-12 4" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="toolbar-group toolbar-actions">
+                <button id="cancel-button" class="tool-button icon-button danger" aria-label="Cancel" title="Cancel">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6 6l12 12M18 6L6 18" />
+                    </svg>
+                </button>
+                <button id="save-button" class="tool-button icon-button primary" aria-label="Save" title="Save">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M5 4h12l2 2v14H5z" />
+                        <path d="M8 4v6h8V4" />
+                        <path d="M8 17h8" />
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <main class="review-main">
+            <div id="status-message" class="status-message">Loading screenshot...</div>
+            <canvas id="review-canvas" class="review-canvas"></canvas>
+        </main>
+
+        <script src="screenshot-store.js"></script>
+        <script src="screenshot-review.js"></script>
+    </body>
+
+</html>

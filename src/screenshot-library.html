@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Screenshot Library - The Infinity Gauntlet</title>
+        <link rel="icon" type="image/svg+xml" href="../assets/gauntlet.svg">
+        <link rel="stylesheet" href="screenshot-library.css">
+    </head>
+
+    <body>
+        <main class="library-shell">
+            <header class="library-header">
+                <div>
+                    <h1>Screenshot Library</h1>
+                    <p id="usage-summary" class="usage-summary">Loading library...</p>
+                </div>
+                <label class="search-label">
+                    <span>Search titles</span>
+                    <input id="search-input" type="search" placeholder="Search screenshots">
+                </label>
+            </header>
+
+            <section id="library-grid" class="library-grid" aria-live="polite"></section>
+            <p id="empty-state" class="empty-state hidden">No screenshots found.</p>
+            <p id="status-message" class="status-message" role="status"></p>
+        </main>
+
+        <script src="screenshot-store.js"></script>
+        <script src="screenshot-library.js"></script>
+    </body>
+
+</html>

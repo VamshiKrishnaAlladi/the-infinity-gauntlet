@@ -147,13 +147,19 @@ async function saveSettings() {
     }
 }
 
+function openLibrary() {
+    chrome.tabs.create( { url: chrome.runtime.getURL( 'src/screenshot-library.html' ) } );
+}
+
 function setupEventListeners() {
     const saveButton = document.getElementById( 'save-button' );
     const addUrlButton = document.getElementById( 'add-url-button' );
     const durationInput = document.getElementById( 'bypass-duration' );
     const urlInput = document.getElementById( 'url-input' );
+    const openLibraryButton = document.getElementById( 'open-library-button' );
 
     if ( saveButton ) saveButton.addEventListener( 'click', saveSettings );
+    if ( openLibraryButton ) openLibraryButton.addEventListener( 'click', openLibrary );
 
     if ( addUrlButton ) addUrlButton.addEventListener( 'click', addUrl );
 
@@ -188,6 +194,7 @@ if ( typeof module !== 'undefined' && module.exports ) {
         addUrl,
         removeUrl,
         renderUrlList,
+        openLibrary,
         DEFAULT_BYPASS_DURATION
     };
 }

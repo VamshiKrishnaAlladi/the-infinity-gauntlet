@@ -175,6 +175,10 @@ header h1 {
     text-align: center;
 }
 
+.hidden {
+    display: none !important;
+}
+
 /* Settings link - top right icon */
 .settings-link {
     position: absolute;

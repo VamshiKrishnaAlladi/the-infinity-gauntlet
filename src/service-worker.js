@@ -11,6 +11,7 @@ let bypassCache = {};
 let bypassCheckInterval = null;
 let badgeUpdateInterval = null;
 const reviewTabScreenshotIds = {};
+const fallbackCapturedScreenshots = {};
 let screenshotStore = typeof globalThis !== 'undefined' ? globalThis.InfinityGauntletScreenshotStore : undefined;
 
 if ( !screenshotStore && typeof importScripts === 'function' ) {
@@ -686,12 +687,27 @@ async function openScreenshotReviewTab( sourceTab, screenshotId ) {
 }
 
 async function storeScreenshotForReview( dataUrl, title ) {
-    await screenshotStore.deleteStaleTemporaryScreenshots();
-    const record = await screenshotStore.putTemporaryScreenshot( {
+    const record = await screenshotStore.createScreenshotLibraryItem( {
         dataUrl,
-        title
+        title,
+        edits: []
     } );
     return record.id;
+}
+
+function createFallbackDownloadId() {
+    return screenshotStore.createScreenshotId();
+}
+
+async function downloadCapturedScreenshotFallback( fallbackDownloadId ) {
+    const fallback = fallbackCapturedScreenshots[ fallbackDownloadId ];
+    if ( !fallback ) {
+        return { success: false, error: 'Captured screenshot is no longer available for download.' };
+    }
+
+    await downloadScreenshot( fallback.dataUrl, fallback.title );
+    delete fallbackCapturedScreenshots[ fallbackDownloadId ];
+    return { success: true };
 }
 
 async function captureFullPageScreenshot() {
@@ -745,7 +761,27 @@ async function captureFullPageScreenshot() {
         metrics,
         tiles
     } );
-    const screenshotId = await storeScreenshotForReview( dataUrl, metrics.title );
+    let screenshotId;
+    try {
+        screenshotId = await storeScreenshotForReview( dataUrl, metrics.title );
+    } catch ( error ) {
+        console.error( 'Service Worker: Error saving screenshot to library:', error );
+        const fallbackDownloadId = createFallbackDownloadId();
+        fallbackCapturedScreenshots[ fallbackDownloadId ] = {
+            dataUrl,
+            title: metrics.title,
+            createdAt: Date.now()
+        };
+        return {
+            success: false,
+            error: 'Failed to save screenshot to the library.',
+            storageError: true,
+            canDownloadCapturedPng: true,
+            fallbackDownloadId,
+            tileCount: tiles.length
+        };
+    }
+
     const reviewTab = await openScreenshotReviewTab( tab, screenshotId );
 
     return {
@@ -767,7 +803,7 @@ chrome.runtime.onMessage.addListener( ( message, sender, sendResponse ) => {
 } );
 
 async function handleMessage( message ) {
-    const { type, url, duration } = message;
+    const { type, url, duration, fallbackDownloadId } = message;
 
     switch ( type ) {
         case 'getBlockedUrls':
@@ -805,6 +841,9 @@ async function handleMessage( message ) {
         case 'captureFullPageScreenshot':
             return captureFullPageScreenshot();
 
+        case 'downloadCapturedScreenshotFallback':
+            return downloadCapturedScreenshotFallback( fallbackDownloadId );
+
         default:
             return { success: false, error: `Unknown message type: ${type}` };
     }
@@ -836,14 +875,10 @@ if ( chrome.tabs?.onRemoved ) {
         if ( !screenshotId ) return;
 
         delete reviewTabScreenshotIds[ tabId ];
-        screenshotStore.deleteTemporaryScreenshot( screenshotId ).catch( error => {
-            console.error( 'Service Worker: Error deleting temporary screenshot after review tab close:', error );
-        } );
     } );
 }
 
 async function initialize() {
-    await screenshotStore.deleteStaleTemporaryScreenshots();
     await getBlockedUrls();
 }
 
@@ -877,7 +912,9 @@ if ( typeof module !== 'undefined' && module.exports ) {
         storeScreenshotForReview,
         openScreenshotReviewTab,
         downloadScreenshot,
+        downloadCapturedScreenshotFallback,
         getReviewTabScreenshotIds: () => ( { ...reviewTabScreenshotIds } ),
+        getFallbackCapturedScreenshots: () => ( { ...fallbackCapturedScreenshots } ),
         getScreenshotPageMetrics,
         prepareStickyElementsForScreenshot,
         setStickyElementsForScreenshot,

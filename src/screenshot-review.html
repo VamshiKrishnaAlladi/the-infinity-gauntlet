@@ -88,16 +88,26 @@
             </div>
 
             <div class="toolbar-group toolbar-actions">
-                <button id="cancel-button" class="tool-button icon-button danger" aria-label="Cancel" title="Cancel">
+                <button id="previous-button" class="tool-button icon-button" aria-label="Previous screenshot" title="Previous screenshot" disabled>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M15 18l-6-6l6-6" />
+                    </svg>
+                </button>
+                <button id="next-button" class="tool-button icon-button" aria-label="Next screenshot" title="Next screenshot" disabled>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M9 18l6-6l-6-6" />
+                    </svg>
+                </button>
+                <button id="close-button" class="tool-button icon-button danger" aria-label="Close" title="Close">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M6 6l12 12M18 6L6 18" />
                     </svg>
                 </button>
-                <button id="save-button" class="tool-button icon-button primary" aria-label="Save" title="Save">
+                <button id="export-button" class="tool-button icon-button primary" aria-label="Export" title="Export">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M5 4h12l2 2v14H5z" />
-                        <path d="M8 4v6h8V4" />
-                        <path d="M8 17h8" />
+                        <path d="M12 3v12" />
+                        <path d="M8 11l4 4l4-4" />
+                        <path d="M5 19h14" />
                     </svg>
                 </button>
             </div>

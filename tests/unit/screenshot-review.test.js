@@ -16,6 +16,7 @@ const {
     persistTitleChange,
     removeSelectedEdit,
     saveIncludeTimestampPreference,
+    createDraftSnapshot,
     trimHistory,
     state
 } = require( '../../src/screenshot-review' );
@@ -27,13 +28,21 @@ describe( 'Screenshot Review Module', () => {
         state.redactMode = 'mosaic';
         state.undoStack = [];
         state.id = null;
-        state.dataUrl = null;
+        state.originalBlob = null;
         state.createdAt = null;
+        state.updatedAt = null;
         state.backingCanvas = null;
         state.includeTimestamp = true;
         state.edits = [];
         state.selectedEditId = null;
         state.contextMenuEditId = null;
+        clearTimeout( state.autosaveTimeout );
+        clearTimeout( state.thumbnailTimeout );
+        state.autosaveTimeout = null;
+        state.thumbnailTimeout = null;
+        state.autosavePromise = null;
+        state.thumbnailSavePromise = null;
+        state.lastSavedDraft = null;
         jest.clearAllMocks();
     } );
 
@@ -190,22 +199,20 @@ describe( 'Screenshot Review Module', () => {
         expect( warning.classList.contains( 'hidden' ) ).toBe( true );
     } );
 
-    it( 'should persist edited title in the temporary screenshot record', async () => {
-        const putTemporaryScreenshot = jest.fn().mockResolvedValue( undefined );
-        global.InfinityGauntletScreenshotStore = { putTemporaryScreenshot };
+    it( 'should update edited title and schedule draft autosave', async () => {
+        jest.useFakeTimers();
         state.id = 'shot-1';
-        state.dataUrl = 'data:image/png;base64,test';
         state.createdAt = 1234;
+        state.title = 'Old Screenshot Title';
+        state.lastSavedDraft = createDraftSnapshot();
 
         await persistTitleChange( '  New   Screenshot   Title  ' );
 
         expect( state.title ).toBe( 'New Screenshot Title' );
-        expect( putTemporaryScreenshot ).toHaveBeenCalledWith( {
-            id: 'shot-1',
-            dataUrl: 'data:image/png;base64,test',
-            title: 'New Screenshot Title',
-            createdAt: 1234
-        } );
+        expect( state.autosaveTimeout ).not.toBeNull();
+        clearTimeout( state.autosaveTimeout );
+        state.autosaveTimeout = null;
+        jest.useRealTimers();
     } );
 
     it( 'should prevent default for command undo shortcuts outside text editing', () => {

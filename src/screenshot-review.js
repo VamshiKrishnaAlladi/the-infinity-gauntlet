@@ -12,7 +12,9 @@
         id: null,
         title: 'Untitled Page',
         createdAt: null,
-        dataUrl: null,
+        updatedAt: null,
+        originalBlob: null,
+        imageObjectUrl: null,
         tool: 'redact',
         redactMode: 'mosaic',
         image: null,
@@ -32,7 +34,12 @@
         includeTimestamp: true,
         toastTimeout: null,
         contextMenuEditId: null,
-        tempDeleted: false
+        autosaveTimeout: null,
+        thumbnailTimeout: null,
+        autosavePromise: null,
+        thumbnailSavePromise: null,
+        lastSavedDraft: null,
+        navigationItems: []
     };
 
     function padDatePart( value ) {
@@ -116,6 +123,113 @@
         }, 2200 );
     }
 
+    function createDraftSnapshot() {
+        return JSON.stringify( {
+            title: state.title,
+            edits: state.edits
+        } );
+    }
+
+    function hasDraftChanges() {
+        return state.lastSavedDraft !== createDraftSnapshot();
+    }
+
+    function canvasToBlob( canvas ) {
+        if ( canvas.toBlob ) {
+            return new Promise( resolve => {
+                canvas.toBlob( blob => {
+                    resolve( blob || root.InfinityGauntletScreenshotStore.dataUrlToBlob( canvas.toDataURL( 'image/png' ) ) );
+                }, 'image/png' );
+            } );
+        }
+
+        return Promise.resolve( root.InfinityGauntletScreenshotStore.dataUrlToBlob( canvas.toDataURL( 'image/png' ) ) );
+    }
+
+    async function createThumbnailBlob() {
+        const source = state.backingCanvas;
+        if ( !source ) return null;
+
+        const maxWidth = 420;
+        const maxHeight = 260;
+        const scale = Math.min( 1, maxWidth / source.width, maxHeight / source.height );
+        const thumbnailCanvas = document.createElement( 'canvas' );
+        thumbnailCanvas.width = Math.max( 1, Math.round( source.width * scale ) );
+        thumbnailCanvas.height = Math.max( 1, Math.round( source.height * scale ) );
+        const thumbnailContext = thumbnailCanvas.getContext( '2d' );
+        thumbnailContext.imageSmoothingEnabled = true;
+        thumbnailContext.imageSmoothingQuality = 'high';
+        thumbnailContext.drawImage( source, 0, 0, thumbnailCanvas.width, thumbnailCanvas.height );
+        return canvasToBlob( thumbnailCanvas );
+    }
+
+    async function saveThumbnail() {
+        if ( !state.id || !state.backingCanvas ) return;
+        const thumbnailBlob = await createThumbnailBlob();
+        if ( !thumbnailBlob ) return;
+
+        state.thumbnailSavePromise = root.InfinityGauntletScreenshotStore.updateScreenshotLibraryItem( state.id, {
+            thumbnailBlob,
+            updatedAt: state.updatedAt || Date.now()
+        } ).catch( error => {
+            console.error( 'Failed to update screenshot thumbnail:', error );
+            setStatus( 'Draft saved, but thumbnail update failed.' );
+        } ).finally( () => {
+            state.thumbnailSavePromise = null;
+        } );
+
+        await state.thumbnailSavePromise;
+    }
+
+    function scheduleThumbnailRefresh() {
+        clearTimeout( state.thumbnailTimeout );
+        state.thumbnailTimeout = setTimeout( () => {
+            state.thumbnailTimeout = null;
+            saveThumbnail();
+        }, 5000 );
+    }
+
+    async function saveDraft() {
+        if ( !state.id || !hasDraftChanges() ) return null;
+        if ( state.autosavePromise ) return state.autosavePromise;
+
+        const snapshot = createDraftSnapshot();
+        state.autosavePromise = root.InfinityGauntletScreenshotStore.updateScreenshotLibraryItem( state.id, {
+            title: state.title,
+            edits: state.edits
+        } ).then( item => {
+            state.updatedAt = item.updatedAt;
+            state.lastSavedDraft = snapshot;
+            setStatus( 'Draft saved.' );
+            scheduleThumbnailRefresh();
+            return item;
+        } ).catch( error => {
+            console.error( 'Failed to autosave screenshot draft:', error );
+            setStatus( 'Failed to autosave draft.' );
+            throw error;
+        } ).finally( () => {
+            state.autosavePromise = null;
+        } );
+
+        return state.autosavePromise;
+    }
+
+    function scheduleDraftAutosave() {
+        if ( !state.id ) return;
+        clearTimeout( state.autosaveTimeout );
+        state.autosaveTimeout = setTimeout( () => {
+            state.autosaveTimeout = null;
+            saveDraft().catch( () => { } );
+        }, 2000 );
+    }
+
+    async function flushDraftAutosave() {
+        clearTimeout( state.autosaveTimeout );
+        state.autosaveTimeout = null;
+        if ( state.autosavePromise ) await state.autosavePromise;
+        if ( hasDraftChanges() ) await saveDraft();
+    }
+
     function setTitleText( title ) {
         const titleElement = document.getElementById( 'review-title' );
         if ( titleElement ) {
@@ -131,15 +245,7 @@
         const nextTitle = rawTitle.replace( /\s+/g, ' ' ).trim() || 'Untitled Page';
         state.title = nextTitle;
         setTitleText( nextTitle );
-
-        if ( state.id && state.dataUrl ) {
-            await root.InfinityGauntletScreenshotStore.putTemporaryScreenshot( {
-                id: state.id,
-                dataUrl: state.dataUrl,
-                title: state.title,
-                createdAt: state.createdAt || Date.now()
-            } );
-        }
+        scheduleDraftAutosave();
 
         return nextTitle;
     }
@@ -342,6 +448,7 @@
         state.redoStack.push( createHistorySnapshot() );
         restoreHistorySnapshot( state.undoStack.pop() );
         updateHistoryButtons();
+        scheduleDraftAutosave();
     }
 
     async function redo() {
@@ -349,6 +456,7 @@
         state.undoStack.push( createHistorySnapshot() );
         restoreHistorySnapshot( state.redoStack.pop() );
         updateHistoryButtons();
+        scheduleDraftAutosave();
     }
 
     function loadImage( dataUrl ) {
@@ -358,6 +466,16 @@
             image.onerror = () => reject( new Error( 'Failed to load screenshot' ) );
             image.src = dataUrl;
         } );
+    }
+
+    async function getImageSourceFromBlob( blob ) {
+        if ( root.URL?.createObjectURL ) {
+            if ( state.imageObjectUrl ) root.URL.revokeObjectURL?.( state.imageObjectUrl );
+            state.imageObjectUrl = root.URL.createObjectURL( blob );
+            return state.imageObjectUrl;
+        }
+
+        return root.InfinityGauntletScreenshotStore.blobToDataUrl( blob );
     }
 
     function getCanvasPoint( event ) {
@@ -412,6 +530,7 @@
         setEditContextMenuOpen( false );
         renderBackingCanvas();
         renderVisibleCanvas();
+        scheduleDraftAutosave();
         return true;
     }
 
@@ -426,6 +545,7 @@
         setEditContextMenuOpen( false );
         renderBackingCanvas();
         renderVisibleCanvas();
+        scheduleDraftAutosave();
         return true;
     }
 
@@ -729,6 +849,7 @@
         state.selectedEditId = edit.id;
         renderBackingCanvas();
         renderVisibleCanvas();
+        scheduleDraftAutosave();
     }
 
     function resetCanvas() {
@@ -738,27 +859,22 @@
         state.selectedEditId = null;
         renderBackingCanvas();
         renderVisibleCanvas();
+        scheduleDraftAutosave();
     }
 
-    async function deleteTemporaryScreenshot() {
-        if ( state.tempDeleted || !state.id ) return;
-        await root.InfinityGauntletScreenshotStore.deleteTemporaryScreenshot( state.id );
-        state.tempDeleted = true;
-    }
-
-    async function saveScreenshot() {
+    async function exportScreenshot() {
+        await flushDraftAutosave();
         const dataUrl = state.backingCanvas.toDataURL( 'image/png' );
         await chrome.downloads.download( {
             url: dataUrl,
             filename: getScreenshotFilename( state.title, new Date(), state.includeTimestamp ),
             saveAs: false
         } );
-        await deleteTemporaryScreenshot();
-        showToast( 'Successfully saved the screenshot' );
+        showToast( 'Exported edited screenshot' );
     }
 
-    async function cancelReview() {
-        await deleteTemporaryScreenshot();
+    async function closeReview() {
+        await flushDraftAutosave();
         window.close();
     }
 
@@ -880,15 +996,42 @@
     function handlePointerUp( event ) {
         if ( !state.isDrawing ) return;
         state.visibleCanvas.releasePointerCapture?.( event.pointerId );
+        const interaction = state.activeInteraction;
         state.isDrawing = false;
 
-        if ( state.activeInteraction?.type === 'draw' ) {
+        if ( interaction?.type === 'draw' ) {
             applyRectangleTool( getCanvasPoint( event ) );
+        } else if ( interaction?.type === 'move' || interaction?.type === 'resize' || interaction?.type === 'pen' ) {
+            scheduleDraftAutosave();
         }
 
         state.previewPoint = null;
         state.activeInteraction = null;
         renderVisibleCanvas();
+    }
+
+    async function refreshNavigationButtons() {
+        if ( !state.id || !root.InfinityGauntletScreenshotStore?.listScreenshotLibraryItems ) return;
+
+        state.navigationItems = await root.InfinityGauntletScreenshotStore.listScreenshotLibraryItems();
+        const currentIndex = state.navigationItems.findIndex( item => item.id === state.id );
+        const previousButton = document.getElementById( 'previous-button' );
+        const nextButton = document.getElementById( 'next-button' );
+
+        if ( previousButton ) previousButton.disabled = currentIndex <= 0;
+        if ( nextButton ) nextButton.disabled = currentIndex < 0 || currentIndex >= state.navigationItems.length - 1;
+    }
+
+    async function navigateAdjacentScreenshot( direction ) {
+        await flushDraftAutosave();
+        await refreshNavigationButtons();
+
+        const currentIndex = state.navigationItems.findIndex( item => item.id === state.id );
+        const nextIndex = currentIndex + direction;
+        const nextItem = state.navigationItems[ nextIndex ];
+        if ( !nextItem ) return;
+
+        window.location.href = `${window.location.pathname}?id=${encodeURIComponent( nextItem.id )}`;
     }
 
     async function initializeReview() {
@@ -898,8 +1041,7 @@
             return;
         }
 
-        await root.InfinityGauntletScreenshotStore.deleteStaleTemporaryScreenshots();
-        const record = await root.InfinityGauntletScreenshotStore.getTemporaryScreenshot( state.id );
+        const record = await root.InfinityGauntletScreenshotStore.getScreenshotLibraryItem( state.id );
         if ( !record ) {
             setStatus( 'Screenshot is no longer available.' );
             return;
@@ -907,11 +1049,14 @@
 
         state.title = record.title || 'Untitled Page';
         state.createdAt = record.createdAt || Date.now();
-        state.dataUrl = record.dataUrl;
+        state.updatedAt = record.updatedAt || state.createdAt;
+        state.originalBlob = record.originalBlob;
+        state.edits = Array.isArray( record.edits ) ? record.edits : [];
+        state.lastSavedDraft = createDraftSnapshot();
         setTitleText( state.title );
         await loadIncludeTimestampPreference();
 
-        state.image = await loadImage( state.dataUrl );
+        state.image = await loadImage( await getImageSourceFromBlob( state.originalBlob ) );
         state.visibleCanvas = document.getElementById( 'review-canvas' );
         state.visibleContext = state.visibleCanvas.getContext( '2d' );
         state.backingCanvas = document.createElement( 'canvas' );
@@ -919,10 +1064,12 @@
         state.backingCanvas.height = state.image.naturalHeight || state.image.height;
         state.backingContext = state.backingCanvas.getContext( '2d' );
         state.backingContext.drawImage( state.image, 0, 0 );
+        renderBackingCanvas();
 
         renderVisibleCanvas();
         setStatus( '' );
         updateHistoryButtons();
+        await refreshNavigationButtons();
     }
 
     function setupEventListeners() {
@@ -985,12 +1132,20 @@
         document.getElementById( 'include-timestamp-checkbox' )?.addEventListener( 'change', event => {
             saveIncludeTimestampPreference( event.target.checked );
         } );
-        document.getElementById( 'save-button' )?.addEventListener( 'click', () => saveScreenshot().catch( error => {
-            console.error( 'Failed to save screenshot:', error );
-            setStatus( 'Failed to save screenshot.' );
+        document.getElementById( 'export-button' )?.addEventListener( 'click', () => exportScreenshot().catch( error => {
+            console.error( 'Failed to export screenshot:', error );
+            setStatus( 'Failed to export screenshot.' );
         } ) );
-        document.getElementById( 'cancel-button' )?.addEventListener( 'click', () => cancelReview().catch( error => {
-            console.error( 'Failed to cancel screenshot review:', error );
+        document.getElementById( 'close-button' )?.addEventListener( 'click', () => closeReview().catch( error => {
+            console.error( 'Failed to close screenshot review:', error );
+        } ) );
+        document.getElementById( 'previous-button' )?.addEventListener( 'click', () => navigateAdjacentScreenshot( -1 ).catch( error => {
+            console.error( 'Failed to open previous screenshot:', error );
+            setStatus( 'Failed to open previous screenshot.' );
+        } ) );
+        document.getElementById( 'next-button' )?.addEventListener( 'click', () => navigateAdjacentScreenshot( 1 ).catch( error => {
+            console.error( 'Failed to open next screenshot:', error );
+            setStatus( 'Failed to open next screenshot.' );
         } ) );
 
         const canvas = document.getElementById( 'review-canvas' );
@@ -1033,6 +1188,13 @@
         loadIncludeTimestampPreference,
         saveIncludeTimestampPreference,
         handleKeyboardShortcuts,
+        scheduleDraftAutosave,
+        flushDraftAutosave,
+        exportScreenshot,
+        closeReview,
+        createDraftSnapshot,
+        refreshNavigationButtons,
+        navigateAdjacentScreenshot,
         state
     };
 

@@ -3,6 +3,7 @@ const { sendMessageWithRetry } = window.URLBlockerUI;
 const INTERNAL_URL_PREFIXES = [ 'chrome://', 'chrome-extension://', 'about:' ];
 const DEFAULT_BUTTON_TEXT = 'Block Site';
 const DEFAULT_SCREENSHOT_BUTTON_TEXT = 'Capture Full Page';
+let fallbackDownloadId = null;
 
 function showError( message ) {
     const errorDiv = document.getElementById( 'error-message' );
@@ -37,6 +38,12 @@ function setScreenshotButtonState( screenshotButton, { disabled, text } ) {
     if ( !screenshotButton ) return;
     screenshotButton.disabled = disabled;
     screenshotButton.textContent = text;
+}
+
+function setFallbackDownload( nextFallbackDownloadId ) {
+    fallbackDownloadId = nextFallbackDownloadId || null;
+    const fallbackButton = document.getElementById( 'fallback-download-button' );
+    if ( fallbackButton ) fallbackButton.classList.toggle( 'hidden', !fallbackDownloadId );
 }
 
 async function getCurrentUrl() {
@@ -110,6 +117,7 @@ async function captureFullPageScreenshot() {
         text: 'Capturing...'
     } );
     setScreenshotStatus( 'Scrolling page and preparing screenshot...' );
+    setFallbackDownload( null );
     clearError();
 
     try {
@@ -120,6 +128,13 @@ async function captureFullPageScreenshot() {
         if ( response?.success ) {
             setScreenshotStatus( 'Screenshot opened for review.' );
             setTimeout( () => setScreenshotStatus( '' ), 2500 );
+            return response;
+        }
+
+        if ( response?.canDownloadCapturedPng && response.fallbackDownloadId ) {
+            setFallbackDownload( response.fallbackDownloadId );
+            setScreenshotStatus( 'Could not save to the library. You can download the captured PNG instead.' );
+            showError( response?.error || 'Failed to save screenshot to the library' );
             return response;
         }
 
@@ -139,8 +154,36 @@ async function captureFullPageScreenshot() {
     }
 }
 
+async function downloadCapturedScreenshotFallback() {
+    if ( !fallbackDownloadId ) return;
+
+    try {
+        const response = await sendMessageWithRetry( {
+            type: 'downloadCapturedScreenshotFallback',
+            fallbackDownloadId
+        } );
+
+        if ( response?.success ) {
+            setFallbackDownload( null );
+            setScreenshotStatus( 'Captured PNG downloaded.' );
+            setTimeout( () => setScreenshotStatus( '' ), 2500 );
+            return;
+        }
+
+        showError( response?.error || 'Failed to download captured PNG' );
+    } catch ( error ) {
+        console.error( 'Failed to download captured PNG:', error );
+        showError( 'Failed to download captured PNG' );
+    }
+}
+
 function openSettings() {
     chrome.tabs.create( { url: chrome.runtime.getURL( 'src/settings.html' ) } );
+    window.close();
+}
+
+function openLibrary() {
+    chrome.tabs.create( { url: chrome.runtime.getURL( 'src/screenshot-library.html' ) } );
     window.close();
 }
 
@@ -150,6 +193,12 @@ function setupEventListeners() {
 
     const screenshotButton = document.getElementById( 'screenshot-button' );
     if ( screenshotButton ) screenshotButton.addEventListener( 'click', captureFullPageScreenshot );
+
+    const libraryButton = document.getElementById( 'library-button' );
+    if ( libraryButton ) libraryButton.addEventListener( 'click', openLibrary );
+
+    const fallbackButton = document.getElementById( 'fallback-download-button' );
+    if ( fallbackButton ) fallbackButton.addEventListener( 'click', downloadCapturedScreenshotFallback );
 
     const settingsLink = document.getElementById( 'settings-link' );
     if ( settingsLink ) {
@@ -177,8 +226,10 @@ if ( typeof module !== 'undefined' && module.exports ) {
     module.exports = {
         blockUrl,
         captureFullPageScreenshot,
+        downloadCapturedScreenshotFallback,
         getCurrentUrl,
         openSettings,
+        openLibrary,
         showError,
         clearError
     };

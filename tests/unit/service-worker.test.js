@@ -220,6 +220,7 @@ describe( 'Service Worker Module', () => {
                     scrollX: 0,
                     scrollY: 0,
                     devicePixelRatio: 1,
+                    backgroundColor: 'rgb(17, 24, 39)',
                     usesElementScroll: false,
                     title: 'Test Page',
                     ...metricsOverride
@@ -269,7 +270,8 @@ describe( 'Service Worker Module', () => {
                     payload: expect.objectContaining( {
                         tiles: expect.any( Array ),
                         metrics: expect.objectContaining( {
-                            scrollHeight: 1000
+                            scrollHeight: 1000,
+                            backgroundColor: 'rgb(17, 24, 39)'
                         } )
                     } )
                 } );

@@ -10,7 +10,9 @@ const {
     updateBlurWarning,
     createCanvasSnapshot,
     handleKeyboardShortcuts,
+    loadIncludeTimestampPreference,
     persistTitleChange,
+    saveIncludeTimestampPreference,
     trimHistory,
     state
 } = require( '../../src/screenshot-review' );
@@ -25,6 +27,8 @@ describe( 'Screenshot Review Module', () => {
         state.dataUrl = null;
         state.createdAt = null;
         state.backingCanvas = null;
+        state.includeTimestamp = true;
+        jest.clearAllMocks();
     } );
 
     afterEach( () => {
@@ -38,6 +42,42 @@ describe( 'Screenshot Review Module', () => {
         );
 
         expect( filename ).toBe( '[2026-05-25 12-15-09] Cluster Backup Policy.png' );
+    } );
+
+    it( 'should build filenames without timestamp when disabled', () => {
+        const filename = getScreenshotFilename(
+            'Cluster: Backup/Policy?',
+            new Date( 2026, 4, 25, 12, 15, 9 ),
+            false
+        );
+
+        expect( filename ).toBe( 'Cluster Backup Policy.png' );
+    } );
+
+    it( 'should load saved timestamp preference', async () => {
+        const checkbox = document.createElement( 'input' );
+        checkbox.id = 'include-timestamp-checkbox';
+        checkbox.type = 'checkbox';
+        document.body.appendChild( checkbox );
+        chrome.storage.local.get.mockResolvedValue( {
+            screenshotIncludeTimestamp: false
+        } );
+
+        await loadIncludeTimestampPreference();
+
+        expect( state.includeTimestamp ).toBe( false );
+        expect( checkbox.checked ).toBe( false );
+    } );
+
+    it( 'should save timestamp preference changes', async () => {
+        chrome.storage.local.set.mockResolvedValue( undefined );
+
+        await saveIncludeTimestampPreference( false );
+
+        expect( state.includeTimestamp ).toBe( false );
+        expect( chrome.storage.local.set ).toHaveBeenCalledWith( {
+            screenshotIncludeTimestamp: false
+        } );
     } );
 
     it( 'should fall back to untitled page for unsafe or empty titles', () => {

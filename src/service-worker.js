@@ -306,6 +306,25 @@ async function executeInAllFrames( tabId, func, args = [] ) {
 }
 
 function getScreenshotPageMetrics() {
+    function isTransparentColor( color ) {
+        return !color || color === 'transparent' || color === 'rgba(0, 0, 0, 0)';
+    }
+
+    function getScreenshotBackgroundColor( scrollElement ) {
+        const candidates = [
+            scrollElement,
+            document.body,
+            document.documentElement
+        ].filter( Boolean );
+
+        for ( const element of candidates ) {
+            const color = window.getComputedStyle( element ).backgroundColor;
+            if ( !isTransparentColor( color ) ) return color;
+        }
+
+        return '#ffffff';
+    }
+
     function getScrollElementScore( element ) {
         const scrollHeight = element.scrollHeight || 0;
         const clientHeight = element.clientHeight || 0;
@@ -375,6 +394,7 @@ function getScreenshotPageMetrics() {
     const outputHeight = isWindowScroll
         ? captureScrollHeight
         : Math.ceil( scrollContainerTop + captureScrollHeight + Math.max( 0, window.innerHeight - scrollContainerBottom ) );
+    const backgroundColor = getScreenshotBackgroundColor( scrollElement );
 
     return {
         scrollWidth,
@@ -390,6 +410,7 @@ function getScreenshotPageMetrics() {
         scrollX: isWindowScroll ? window.scrollX : scrollElement.scrollLeft,
         scrollY: isWindowScroll ? window.scrollY : scrollElement.scrollTop,
         devicePixelRatio: window.devicePixelRatio || 1,
+        backgroundColor,
         usesElementScroll: !isWindowScroll,
         title: document.title || 'page'
     };
@@ -460,9 +481,25 @@ function scrollPageForScreenshot( x, y ) {
 }
 
 function prepareStickyElementsForScreenshot() {
+    const scrollbarStyle = document.createElement( 'style' );
+    scrollbarStyle.id = 'infinity-gauntlet-hide-scrollbars';
+    scrollbarStyle.textContent = `
+        * {
+            scrollbar-width: none !important;
+            scrollbar-gutter: auto !important;
+        }
+        *::-webkit-scrollbar {
+            width: 0 !important;
+            height: 0 !important;
+            display: none !important;
+        }
+    `;
+    document.documentElement.appendChild( scrollbarStyle );
+
     window.__infinityGauntletScreenshot = {
         trackedElements: [],
-        trackedElementSet: new Set()
+        trackedElementSet: new Set(),
+        scrollbarStyle
     };
 
     return { prepared: true };
@@ -553,6 +590,8 @@ function restoreStickyElementsForScreenshot() {
             item.element.style.setProperty( property, value, item.priorities[ property ] );
         }
     }
+
+    state.scrollbarStyle?.remove();
 
     const restoredCount = state.trackedElements.length;
     delete window.__infinityGauntletScreenshot;

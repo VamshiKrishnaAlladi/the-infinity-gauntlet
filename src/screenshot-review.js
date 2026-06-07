@@ -5,6 +5,7 @@
     const HIGHLIGHT_COLOR = 'rgba(250, 204, 21, 0.35)';
     const BLUR_RADIUS_PX = 28;
     const MOSAIC_BLOCK_SIZE = 12;
+    const INCLUDE_TIMESTAMP_PREFERENCE_KEY = 'screenshotIncludeTimestamp';
 
     const state = {
         id: null,
@@ -27,6 +28,8 @@
         activeInteraction: null,
         undoStack: [],
         redoStack: [],
+        includeTimestamp: true,
+        toastTimeout: null,
         tempDeleted: false
     };
 
@@ -50,17 +53,65 @@
             .slice( 0, 120 ) || 'Untitled Page';
     }
 
-    function getScreenshotFilename( title, date = new Date() ) {
-        return `[${getLocalTimestampPrefix( date )}] ${sanitizeFilenamePart( title )}.png`;
+    function getScreenshotFilename( title, date = new Date(), includeTimestamp = true ) {
+        const sanitizedTitle = sanitizeFilenamePart( title );
+        if ( !includeTimestamp ) return `${sanitizedTitle}.png`;
+        return `[${getLocalTimestampPrefix( date )}] ${sanitizedTitle}.png`;
     }
 
     function getScreenshotIdFromUrl() {
         return new URLSearchParams( window.location.search ).get( 'id' );
     }
 
+    function updateTimestampCheckbox( includeTimestamp ) {
+        const checkbox = document.getElementById( 'include-timestamp-checkbox' );
+        if ( checkbox ) checkbox.checked = includeTimestamp;
+    }
+
+    async function loadIncludeTimestampPreference() {
+        try {
+            const result = await chrome.storage.local.get( [ INCLUDE_TIMESTAMP_PREFERENCE_KEY ] );
+            state.includeTimestamp = result[ INCLUDE_TIMESTAMP_PREFERENCE_KEY ] !== false;
+        } catch ( error ) {
+            console.error( 'Failed to load timestamp preference:', error );
+            state.includeTimestamp = true;
+        }
+
+        updateTimestampCheckbox( state.includeTimestamp );
+        return state.includeTimestamp;
+    }
+
+    async function saveIncludeTimestampPreference( includeTimestamp ) {
+        state.includeTimestamp = includeTimestamp;
+        updateTimestampCheckbox( includeTimestamp );
+
+        try {
+            await chrome.storage.local.set( {
+                [ INCLUDE_TIMESTAMP_PREFERENCE_KEY ]: includeTimestamp
+            } );
+        } catch ( error ) {
+            console.error( 'Failed to save timestamp preference:', error );
+            setStatus( 'Failed to save timestamp preference.' );
+        }
+
+        return includeTimestamp;
+    }
+
     function setStatus( message ) {
         const status = document.getElementById( 'status-message' );
         if ( status ) status.textContent = message || '';
+    }
+
+    function showToast( message ) {
+        const toast = document.getElementById( 'toast-message' );
+        if ( !toast ) return;
+
+        toast.textContent = message;
+        toast.classList.remove( 'hidden' );
+        clearTimeout( state.toastTimeout );
+        state.toastTimeout = setTimeout( () => {
+            toast.classList.add( 'hidden' );
+        }, 2200 );
     }
 
     function setTitleText( title ) {
@@ -609,11 +660,11 @@
         const dataUrl = state.backingCanvas.toDataURL( 'image/png' );
         await chrome.downloads.download( {
             url: dataUrl,
-            filename: getScreenshotFilename( state.title ),
+            filename: getScreenshotFilename( state.title, new Date(), state.includeTimestamp ),
             saveAs: false
         } );
         await deleteTemporaryScreenshot();
-        setStatus( 'Saved.' );
+        showToast( 'Successfully saved the screenshot' );
     }
 
     async function cancelReview() {
@@ -750,6 +801,7 @@
         state.createdAt = record.createdAt || Date.now();
         state.dataUrl = record.dataUrl;
         setTitleText( state.title );
+        await loadIncludeTimestampPreference();
 
         state.image = await loadImage( state.dataUrl );
         state.visibleCanvas = document.getElementById( 'review-canvas' );
@@ -813,6 +865,9 @@
         document.getElementById( 'undo-button' )?.addEventListener( 'click', runUndo );
         document.getElementById( 'redo-button' )?.addEventListener( 'click', runRedo );
         document.getElementById( 'reset-button' )?.addEventListener( 'click', resetCanvas );
+        document.getElementById( 'include-timestamp-checkbox' )?.addEventListener( 'change', event => {
+            saveIncludeTimestampPreference( event.target.checked );
+        } );
         document.getElementById( 'save-button' )?.addEventListener( 'click', () => saveScreenshot().catch( error => {
             console.error( 'Failed to save screenshot:', error );
             setStatus( 'Failed to save screenshot.' );
@@ -854,6 +909,8 @@
         setRedactMode,
         setRedactMenuOpen,
         persistTitleChange,
+        loadIncludeTimestampPreference,
+        saveIncludeTimestampPreference,
         handleKeyboardShortcuts,
         state
     };

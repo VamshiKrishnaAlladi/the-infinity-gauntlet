@@ -86,6 +86,44 @@
         );
     }
 
+    function getSamplePoint( image, metrics ) {
+        const scale = metrics.devicePixelRatio || 1;
+        const y = Math.max( 0, image.height - 2 );
+        let x = 1;
+
+        if ( metrics.usesElementScroll ) {
+            const leftChromeWidth = ( metrics.scrollContainerLeft || 0 ) * scale;
+            const rightChromeStart = ( metrics.scrollContainerRight || metrics.viewportWidth ) * scale;
+
+            if ( leftChromeWidth > 2 ) {
+                x = Math.floor( leftChromeWidth / 2 );
+            } else if ( rightChromeStart < image.width - 2 ) {
+                x = Math.floor( ( rightChromeStart + image.width ) / 2 );
+            }
+        }
+
+        return {
+            x: Math.max( 0, Math.min( image.width - 1, x ) ),
+            y
+        };
+    }
+
+    function getSampledFillColor( image, metrics ) {
+        try {
+            const sampleCanvas = document.createElement( 'canvas' );
+            sampleCanvas.width = image.width;
+            sampleCanvas.height = image.height;
+            const sampleContext = sampleCanvas.getContext( '2d', { willReadFrequently: true } );
+            sampleContext.drawImage( image, 0, 0 );
+
+            const point = getSamplePoint( image, metrics );
+            const [ red, green, blue, alpha ] = sampleContext.getImageData( point.x, point.y, 1, 1 ).data;
+            return `rgba(${red}, ${green}, ${blue}, ${alpha / 255})`;
+        } catch ( error ) {
+            return metrics.backgroundColor || '#ffffff';
+        }
+    }
+
     async function stitchScreenshotTiles( payload ) {
         const { metrics, tiles } = payload;
         if ( !metrics || !Array.isArray( tiles ) || tiles.length === 0 ) {
@@ -99,15 +137,16 @@
 
         const context = canvas.getContext( '2d' );
         context.imageSmoothingEnabled = false;
-        context.fillStyle = '#ffffff';
-        context.fillRect( 0, 0, canvas.width, canvas.height );
 
         const sortedTiles = [ ...tiles ].sort( ( a, b ) => a.y - b.y );
+        const firstImage = await loadImage( sortedTiles[ 0 ].dataUrl );
+        context.fillStyle = getSampledFillColor( firstImage, metrics );
+        context.fillRect( 0, 0, canvas.width, canvas.height );
         let drawnUntilY = 0;
 
         for ( let index = 0; index < sortedTiles.length; index++ ) {
             const tile = sortedTiles[ index ];
-            const image = await loadImage( tile.dataUrl );
+            const image = index === 0 ? firstImage : await loadImage( tile.dataUrl );
             if ( metrics.usesElementScroll && index === 0 ) {
                 drawCrop( context, image, getInitialElementScrollCrop( metrics, image ) );
                 drawnUntilY = Math.min(

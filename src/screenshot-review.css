@@ -53,6 +53,67 @@ body {
     margin-left: 0;
 }
 
+.timestamp-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--text-muted);
+    font-size: 11px;
+    letter-spacing: 0.01em;
+    user-select: none;
+    cursor: pointer;
+}
+
+.timestamp-toggle input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.timestamp-toggle:hover {
+    color: var(--text-secondary);
+}
+
+.timestamp-toggle-text {
+    line-height: 1;
+}
+
+.timestamp-switch {
+    position: relative;
+    width: 30px;
+    height: 16px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.timestamp-switch::after {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 10px;
+    height: 10px;
+    background-color: var(--text-muted);
+    border-radius: 999px;
+    content: '';
+    transition: background-color 140ms ease, transform 140ms ease;
+}
+
+.timestamp-toggle input:checked + .timestamp-switch {
+    background-color: rgba(129, 140, 248, 0.28);
+    border-color: var(--primary-color);
+}
+
+.timestamp-toggle input:checked + .timestamp-switch::after {
+    background-color: var(--primary-color);
+    transform: translateX( 14px );
+}
+
+.timestamp-toggle input:focus-visible + .timestamp-switch {
+    box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.35);
+}
+
 .review-title {
     max-width: min(560px, 45vw);
     overflow: hidden;
@@ -285,6 +346,31 @@ body {
     margin-bottom: 12px;
     color: var(--text-secondary);
     font-size: 13px;
+}
+
+.toast-message {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    z-index: 50;
+    max-width: 280px;
+    padding: 10px 12px;
+    color: var(--text-primary);
+    font-size: 13px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--primary-color);
+    border-radius: 8px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.toast-message.hidden {
+    display: block;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(16px);
 }
 
 .review-canvas {

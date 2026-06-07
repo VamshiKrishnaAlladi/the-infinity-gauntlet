@@ -16,6 +16,12 @@
                 <input id="review-title-input" class="review-title-input hidden" type="text" aria-label="Screenshot title">
             </div>
 
+            <label class="timestamp-toggle" title="Include timestamp in saved filename">
+                <input id="include-timestamp-checkbox" type="checkbox" checked>
+                <span class="timestamp-switch" aria-hidden="true"></span>
+                <span class="timestamp-toggle-text">include timestamp</span>
+            </label>
+
             <div class="toolbar-group">
                 <div class="split-button" id="redact-split-button">
                     <button class="tool-button icon-button split-main active" data-tool="redact" id="redact-tool" aria-label="Redact" title="Redact">
@@ -100,6 +106,8 @@
             <div id="status-message" class="status-message">Loading screenshot...</div>
             <canvas id="review-canvas" class="review-canvas"></canvas>
         </main>
+
+        <div id="toast-message" class="toast-message hidden" role="status" aria-live="polite"></div>
 
         <script src="screenshot-store.js"></script>
         <script src="screenshot-review.js"></script>

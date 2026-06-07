@@ -26,27 +26,26 @@ body {
 }
 
 .library-shell {
-    width: min(1180px, calc(100% - 32px));
+    width: 100%;
     margin: 0 auto;
-    padding: 32px 0;
+    padding: 28px 24px;
 }
 
 .library-header {
     display: flex;
     flex-wrap: wrap;
-    align-items: end;
+    align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 24px;
-    padding: 24px;
-    background-color: var(--bg-primary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
+    gap: 14px;
+    margin-bottom: 20px;
+    padding: 0 2px 16px;
+    border-bottom: 1px solid rgba(75, 85, 99, 0.65);
 }
 
 .library-header h1 {
-    margin: 0 0 6px;
-    font-size: 28px;
+    margin: 0 0 4px;
+    font-size: 24px;
+    letter-spacing: -0.02em;
 }
 
 .usage-summary {
@@ -57,18 +56,18 @@ body {
 
 .search-label {
     display: flex;
-    min-width: min(320px, 100%);
+    min-width: min(280px, 100%);
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 12px;
 }
 
 .search-label input {
-    padding: 11px 13px;
+    padding: 9px 12px;
     color: var(--text-primary);
-    background-color: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
+    background-color: rgba(31, 41, 55, 0.72);
+    border: 1px solid rgba(75, 85, 99, 0.8);
     border-radius: var(--radius-md);
     outline: none;
 }
@@ -81,7 +80,7 @@ body {
 .library-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 18px;
+    gap: 16px;
 }
 
 .library-card {
@@ -91,26 +90,44 @@ body {
     border-radius: var(--radius-lg);
 }
 
+.library-thumbnail-wrap {
+    position: relative;
+    display: block;
+    width: 100%;
+    padding: 0;
+    overflow: hidden;
+    background-color: #ffffff;
+    border-bottom: 1px solid var(--border-color);
+    border-top: 0;
+    border-right: 0;
+    border-left: 0;
+    cursor: pointer;
+}
+
+.library-thumbnail-wrap:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: -2px;
+}
+
 .library-thumbnail {
     display: block;
     width: 100%;
-    aspect-ratio: 16 / 10;
+    aspect-ratio: 16 / 9;
     object-fit: cover;
     background-color: #ffffff;
-    border-bottom: 1px solid var(--border-color);
 }
 
 .library-card-body {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 14px;
+    gap: 7px;
+    padding: 10px 11px 11px;
 }
 
 .library-title {
     margin: 0;
     overflow: hidden;
-    font-size: 15px;
+    font-size: 14px;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -118,24 +135,41 @@ body {
 .library-meta {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .library-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    display: flex;
+    gap: 5px;
 }
 
 .library-actions button {
-    padding: 8px 9px;
+    display: inline-flex;
+    width: 28px;
+    height: 28px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
     color: var(--text-primary);
-    background-color: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
+    background-color: rgba(55, 65, 81, 0.9);
+    border: 1px solid rgba(156, 163, 175, 0.28);
+    border-radius: 999px;
     cursor: pointer;
+}
+
+.library-actions button svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .library-actions button:hover {

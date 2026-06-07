@@ -10,6 +10,8 @@
         items: [],
         objectUrls: []
     };
+    const timeFormat = root.InfinityGauntletTimeFormat ||
+        ( typeof require !== 'undefined' ? require( './utils/time-format' ) : null );
 
     function padDatePart( value ) {
         return value.toString().padStart( 2, '0' );
@@ -46,11 +48,6 @@
             unitIndex++;
         }
         return `${value.toFixed( unitIndex === 0 ? 0 : 1 )} ${units[ unitIndex ]}`;
-    }
-
-    function formatDateTime( timestamp ) {
-        if ( !timestamp ) return 'Unknown';
-        return new Date( timestamp ).toLocaleString();
     }
 
     function setStatus( message ) {
@@ -238,10 +235,18 @@
         setStatus( 'Screenshot deleted.' );
     }
 
-    function createActionButton( label, className, onClick ) {
+    const ACTION_ICONS = {
+        exportEdited: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12" /><path d="M8 11l4 4l4-4" /><path d="M5 19h14" /></svg>',
+        exportOriginal: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10v10H4z" /><path d="M7 10h4" /><path d="M7 14h3" /><path d="M17 7v9" /><path d="M14 13l3 3l3-3" /><path d="M13 20h8" /></svg>',
+        delete: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M6 6l1 15h10l1-15" /><path d="M10 11v6" /><path d="M14 11v6" /></svg>'
+    };
+
+    function createActionButton( label, iconName, className, onClick ) {
         const button = document.createElement( 'button' );
         button.type = 'button';
-        button.textContent = label;
+        button.innerHTML = ACTION_ICONS[ iconName ];
+        button.setAttribute( 'aria-label', label );
+        button.title = label;
         if ( className ) button.className = className;
         button.addEventListener( 'click', onClick );
         return button;
@@ -251,10 +256,26 @@
         const card = document.createElement( 'article' );
         card.className = 'library-card';
 
+        const imageWrap = document.createElement( 'button' );
+        imageWrap.type = 'button';
+        imageWrap.className = 'library-thumbnail-wrap';
+        imageWrap.setAttribute( 'aria-label', `Open ${item.title} for editing` );
+        imageWrap.title = 'Open for editing';
+        imageWrap.addEventListener( 'click', () => openItem( item.id ) );
+
         const image = document.createElement( 'img' );
         image.className = 'library-thumbnail';
         image.alt = '';
         image.src = createObjectUrl( item.thumbnailBlob || item.originalBlob );
+
+        const actions = document.createElement( 'div' );
+        actions.className = 'library-actions';
+        actions.addEventListener( 'click', event => event.stopPropagation() );
+        actions.appendChild( createActionButton( 'Export edited', 'exportEdited', 'primary', () => exportEdited( item.id ).catch( handleActionError ) ) );
+        actions.appendChild( createActionButton( 'Export original', 'exportOriginal', '', () => exportOriginal( item.id ).catch( handleActionError ) ) );
+        actions.appendChild( createActionButton( 'Delete', 'delete', 'danger', () => deleteItem( item.id ).catch( handleActionError ) ) );
+        imageWrap.appendChild( image );
+        imageWrap.appendChild( actions );
 
         const body = document.createElement( 'div' );
         body.className = 'library-card-body';
@@ -267,25 +288,17 @@
         const meta = document.createElement( 'div' );
         meta.className = 'library-meta';
         const created = document.createElement( 'span' );
-        created.textContent = `Created ${formatDateTime( item.createdAt )}`;
+        created.textContent = `Created - ${timeFormat.formatDisplayTimestamp( item.createdAt )}`;
         const updated = document.createElement( 'span' );
         updated.textContent = item.updatedAt && item.updatedAt !== item.createdAt
-            ? `Updated ${formatDateTime( item.updatedAt )}`
+            ? `Updated - ${timeFormat.formatDisplayTimestamp( item.updatedAt )}`
             : 'Not edited yet';
         meta.appendChild( created );
         meta.appendChild( updated );
 
-        const actions = document.createElement( 'div' );
-        actions.className = 'library-actions';
-        actions.appendChild( createActionButton( 'Open', 'primary', () => openItem( item.id ) ) );
-        actions.appendChild( createActionButton( 'Export Edited', '', () => exportEdited( item.id ).catch( handleActionError ) ) );
-        actions.appendChild( createActionButton( 'Export Original', '', () => exportOriginal( item.id ).catch( handleActionError ) ) );
-        actions.appendChild( createActionButton( 'Delete', 'danger', () => deleteItem( item.id ).catch( handleActionError ) ) );
-
         body.appendChild( title );
         body.appendChild( meta );
-        body.appendChild( actions );
-        card.appendChild( image );
+        card.appendChild( imageWrap );
         card.appendChild( body );
         return card;
     }
@@ -337,6 +350,7 @@
 
     const api = {
         formatBytes,
+        formatDisplayTimestamp: timeFormat.formatDisplayTimestamp,
         sanitizeFilenamePart,
         renderEditedBlob,
         getReviewUrl,

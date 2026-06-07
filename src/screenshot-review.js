@@ -41,6 +41,8 @@
         lastSavedDraft: null,
         navigationItems: []
     };
+    const timeFormat = root.InfinityGauntletTimeFormat ||
+        ( typeof require !== 'undefined' ? require( './utils/time-format' ) : null );
 
     function padDatePart( value ) {
         return value.toString().padStart( 2, '0' );
@@ -66,6 +68,10 @@
         const sanitizedTitle = sanitizeFilenamePart( title );
         if ( !includeTimestamp ) return `${sanitizedTitle}.png`;
         return `[${getLocalTimestampPrefix( date )}] ${sanitizedTitle}.png`;
+    }
+
+    function formatSavedAtMessage( timestamp = Date.now(), now = Date.now() ) {
+        return `Saved - ${timeFormat.formatDisplayTimestamp( timestamp, now )}`;
     }
 
     function getScreenshotIdFromUrl() {
@@ -194,13 +200,14 @@
         if ( state.autosavePromise ) return state.autosavePromise;
 
         const snapshot = createDraftSnapshot();
+        setStatus( 'Saving draft...' );
         state.autosavePromise = root.InfinityGauntletScreenshotStore.updateScreenshotLibraryItem( state.id, {
             title: state.title,
             edits: state.edits
         } ).then( item => {
             state.updatedAt = item.updatedAt;
             state.lastSavedDraft = snapshot;
-            setStatus( 'Draft saved.' );
+            setStatus( formatSavedAtMessage( state.updatedAt ) );
             scheduleThumbnailRefresh();
             return item;
         } ).catch( error => {
@@ -1171,6 +1178,8 @@
     const api = {
         MAX_HISTORY_STATES,
         getScreenshotFilename,
+        formatSavedAtMessage,
+        formatDisplayTimestamp: timeFormat.formatDisplayTimestamp,
         sanitizeFilenamePart,
         normalizeRect,
         resizeRect,

@@ -236,6 +236,17 @@ body {
     background-color: var(--border-color);
 }
 
+.toolbar-status {
+    flex: 0 0 auto;
+    min-width: 0;
+    max-width: min(220px, 24vw);
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .history-group {
     gap: 8px;
 }
@@ -340,12 +351,6 @@ body {
 
 .review-main {
     padding: 16px;
-}
-
-.status-message {
-    margin-bottom: 12px;
-    color: var(--text-secondary);
-    font-size: 13px;
 }
 
 .toast-message {

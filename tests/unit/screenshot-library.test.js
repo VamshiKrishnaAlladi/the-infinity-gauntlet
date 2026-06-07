@@ -73,6 +73,16 @@ describe( 'Screenshot Library Page', () => {
         } );
     } );
 
+    it( 'should open review items when clicking the thumbnail', async () => {
+        await loadLibrary();
+
+        document.querySelector( '.library-thumbnail-wrap' ).click();
+
+        expect( chrome.tabs.create ).toHaveBeenCalledWith( {
+            url: 'chrome-extension://test/src/screenshot-review.html?id=shot-1'
+        } );
+    } );
+
     it( 'should require confirmation before exporting originals', async () => {
         window.confirm.mockReturnValueOnce( false );
 

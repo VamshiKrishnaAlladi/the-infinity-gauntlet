@@ -14,6 +14,7 @@
                 <strong>Screenshot Review</strong>
                 <span id="review-title" class="review-title" tabindex="0" role="button" aria-label="Edit screenshot title" title="Click to edit screenshot title"></span>
                 <input id="review-title-input" class="review-title-input hidden" type="text" aria-label="Screenshot title">
+                <span id="status-message" class="toolbar-status" role="status" aria-live="polite">Loading screenshot...</span>
             </div>
 
             <label class="timestamp-toggle" title="Include timestamp in saved filename">
@@ -114,7 +115,6 @@
         </header>
 
         <main class="review-main">
-            <div id="status-message" class="status-message">Loading screenshot...</div>
             <canvas id="review-canvas" class="review-canvas"></canvas>
         </main>
 
@@ -128,6 +128,7 @@
         <div id="toast-message" class="toast-message hidden" role="status" aria-live="polite"></div>
 
         <script src="screenshot-store.js"></script>
+        <script src="utils/time-format.js"></script>
         <script src="screenshot-review.js"></script>
     </body>
 

@@ -1,6 +1,8 @@
 const {
     MAX_HISTORY_STATES,
     getScreenshotFilename,
+    formatSavedAtMessage,
+    formatDisplayTimestamp,
     changeSelectedRedactionMode,
     clampRectToCanvas,
     getAvailableRedactionModes,
@@ -67,6 +69,15 @@ describe( 'Screenshot Review Module', () => {
         );
 
         expect( filename ).toBe( 'Cluster Backup Policy.png' );
+    } );
+
+    it( 'should format relative and absolute timestamps', () => {
+        const now = new Date( 2026, 5, 7, 22, 31 ).getTime();
+
+        expect( formatDisplayTimestamp( now - 30 * 1000, now ) ).toBe( 'just now' );
+        expect( formatDisplayTimestamp( now - 3 * 24 * 60 * 60 * 1000, now ) ).toBe( '3d ago' );
+        expect( formatDisplayTimestamp( new Date( 2025, 5, 25 ).getTime(), now ) ).toBe( 'Jun 25th 2025' );
+        expect( formatSavedAtMessage( now - 30 * 1000, now ) ).toBe( 'Saved - just now' );
     } );
 
     it( 'should load saved timestamp preference', async () => {

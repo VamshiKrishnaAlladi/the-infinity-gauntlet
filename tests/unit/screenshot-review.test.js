@@ -160,17 +160,28 @@ describe( 'Screenshot Review Module', () => {
         mosaicItem.dataset.redactMode = 'mosaic';
         const blurItem = document.createElement( 'button' );
         blurItem.dataset.redactMode = 'blur';
+        const solidItem = document.createElement( 'button' );
+        solidItem.dataset.redactMode = 'solid';
         document.body.appendChild( warning );
         document.body.appendChild( toggle );
         document.body.appendChild( mosaicItem );
         document.body.appendChild( blurItem );
+        document.body.appendChild( solidItem );
 
         setRedactMode( 'blur' );
 
         expect( state.redactMode ).toBe( 'blur' );
         expect( blurItem.classList.contains( 'active' ) ).toBe( true );
         expect( mosaicItem.classList.contains( 'active' ) ).toBe( false );
+        expect( solidItem.classList.contains( 'active' ) ).toBe( false );
         expect( warning.classList.contains( 'hidden' ) ).toBe( false );
+
+        setRedactMode( 'solid' );
+
+        expect( state.redactMode ).toBe( 'solid' );
+        expect( solidItem.classList.contains( 'active' ) ).toBe( true );
+        expect( blurItem.classList.contains( 'active' ) ).toBe( false );
+        expect( warning.classList.contains( 'hidden' ) ).toBe( true );
     } );
 
     it( 'should persist edited title in the temporary screenshot record', async () => {

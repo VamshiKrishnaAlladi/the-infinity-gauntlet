@@ -3,6 +3,7 @@
     const PEN_COLOR = '#ef4444';
     const PEN_WIDTH = 6;
     const HIGHLIGHT_COLOR = 'rgba(250, 204, 21, 0.35)';
+    const SOLID_REDACTION_COLOR = '#000000';
     const BLUR_RADIUS_PX = 28;
     const MOSAIC_BLOCK_SIZE = 12;
     const INCLUDE_TIMESTAMP_PREFERENCE_KEY = 'screenshotIncludeTimestamp';
@@ -232,8 +233,9 @@
 
         const toggle = document.getElementById( 'redact-mode-toggle' );
         if ( toggle ) {
-            toggle.title = `Redaction mode: ${mode === 'blur' ? 'Blur' : 'Mosaic'}`;
-            toggle.setAttribute( 'aria-label', `Redaction mode: ${mode === 'blur' ? 'Blur' : 'Mosaic'}` );
+            const label = mode === 'blur' ? 'Blur' : mode === 'solid' ? 'Solid' : 'Mosaic';
+            toggle.title = `Redaction mode: ${label}`;
+            toggle.setAttribute( 'aria-label', `Redaction mode: ${label}` );
         }
 
         updateBlurWarning();
@@ -524,9 +526,16 @@
             applyHighlight( edit.rect );
         } else if ( edit.mode === 'blur' ) {
             applyBlur( edit.rect );
+        } else if ( edit.mode === 'solid' ) {
+            applySolidRedaction( edit.rect );
         } else {
             applyMosaic( edit.rect );
         }
+    }
+
+    function applySolidRedaction( rect ) {
+        state.backingContext.fillStyle = SOLID_REDACTION_COLOR;
+        state.backingContext.fillRect( rect.x, rect.y, rect.width, rect.height );
     }
 
     function applyBlur( rect ) {

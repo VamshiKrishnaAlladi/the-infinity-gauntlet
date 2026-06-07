@@ -31,6 +31,7 @@
         redoStack: [],
         includeTimestamp: true,
         toastTimeout: null,
+        contextMenuEditId: null,
         tempDeleted: false
     };
 
@@ -198,6 +199,12 @@
 
     function handleKeyboardShortcuts( event ) {
         if ( isEditingText( event.target ) ) return;
+        if ( event.key === 'Delete' || event.key === 'Backspace' ) {
+            event.preventDefault();
+            removeSelectedEdit();
+            return;
+        }
+
         if ( !( event.metaKey || event.ctrlKey ) ) return;
 
         const key = event.key.toLowerCase();
@@ -246,6 +253,49 @@
         const toggle = document.getElementById( 'redact-mode-toggle' );
         if ( menu ) menu.classList.toggle( 'hidden', !isOpen );
         if ( toggle ) toggle.setAttribute( 'aria-expanded', isOpen ? 'true' : 'false' );
+    }
+
+    function setEditContextMenuOpen( isOpen, x = 0, y = 0 ) {
+        const menu = document.getElementById( 'edit-context-menu' );
+        if ( !menu ) return;
+
+        menu.classList.toggle( 'hidden', !isOpen );
+        if ( !isOpen ) {
+            state.contextMenuEditId = null;
+            renderRedactionModeActions( null );
+            return;
+        }
+
+        renderRedactionModeActions( state.edits.find( edit => edit.id === state.contextMenuEditId ) );
+        menu.style.left = `${x}px`;
+        menu.style.top = `${y}px`;
+    }
+
+    function getRedactionModeLabel( mode ) {
+        if ( mode === 'blur' ) return 'Blur';
+        if ( mode === 'solid' ) return 'Solid';
+        return 'Mosaic';
+    }
+
+    function getAvailableRedactionModes( edit ) {
+        if ( !edit || edit.kind !== 'rect' || edit.tool !== 'redact' ) return [];
+        return [ 'mosaic', 'blur', 'solid' ].filter( mode => mode !== edit.mode );
+    }
+
+    function renderRedactionModeActions( edit ) {
+        const container = document.getElementById( 'redaction-mode-actions' );
+        if ( !container ) return;
+
+        container.replaceChildren();
+        for ( const mode of getAvailableRedactionModes( edit ) ) {
+            const button = document.createElement( 'button' );
+            button.type = 'button';
+            button.className = 'edit-context-menu-item';
+            button.dataset.contextRedactMode = mode;
+            button.setAttribute( 'role', 'menuitem' );
+            button.textContent = `Switch to ${getRedactionModeLabel( mode )}`;
+            container.appendChild( button );
+        }
     }
 
     function updateHistoryButtons() {
@@ -346,6 +396,37 @@
 
     function getSelectedEdit() {
         return state.edits.find( edit => edit.id === state.selectedEditId );
+    }
+
+    function removeSelectedEdit() {
+        const editId = state.contextMenuEditId || state.selectedEditId;
+        if ( !editId ) return false;
+
+        const nextEdits = state.edits.filter( edit => edit.id !== editId );
+        if ( nextEdits.length === state.edits.length ) return false;
+
+        pushHistory();
+        state.edits = nextEdits;
+        if ( state.selectedEditId === editId ) state.selectedEditId = null;
+        state.contextMenuEditId = null;
+        setEditContextMenuOpen( false );
+        renderBackingCanvas();
+        renderVisibleCanvas();
+        return true;
+    }
+
+    function changeSelectedRedactionMode( mode ) {
+        const editId = state.contextMenuEditId || state.selectedEditId;
+        const edit = state.edits.find( item => item.id === editId );
+        if ( !edit || edit.kind !== 'rect' || edit.tool !== 'redact' || edit.mode === mode ) return false;
+
+        pushHistory();
+        edit.mode = mode;
+        state.selectedEditId = edit.id;
+        setEditContextMenuOpen( false );
+        renderBackingCanvas();
+        renderVisibleCanvas();
+        return true;
     }
 
     function getEditableRectAtPoint( point ) {
@@ -683,6 +764,7 @@
 
     function handlePointerDown( event ) {
         if ( !state.backingCanvas ) return;
+        setEditContextMenuOpen( false );
         state.visibleCanvas.setPointerCapture?.( event.pointerId );
         const point = getCanvasPoint( event );
         const selectedEdit = getSelectedEdit();
@@ -730,6 +812,23 @@
             };
         }
         renderVisibleCanvas();
+    }
+
+    function handleCanvasContextMenu( event ) {
+        if ( !state.backingCanvas ) return;
+
+        event.preventDefault();
+        const point = getCanvasPoint( event );
+        const hitEdit = getEditableRectAtPoint( point );
+        if ( !hitEdit ) {
+            setEditContextMenuOpen( false );
+            return;
+        }
+
+        state.selectedEditId = hitEdit.id;
+        state.contextMenuEditId = hitEdit.id;
+        renderVisibleCanvas();
+        setEditContextMenuOpen( true, event.clientX, event.clientY );
     }
 
     function handlePointerMove( event ) {
@@ -850,6 +949,10 @@
         document.addEventListener( 'keydown', event => {
             if ( event.key === 'Escape' ) setRedactMenuOpen( false );
         } );
+        document.addEventListener( 'click', () => setEditContextMenuOpen( false ) );
+        document.addEventListener( 'keydown', event => {
+            if ( event.key === 'Escape' ) setEditContextMenuOpen( false );
+        } );
         const titleElement = document.getElementById( 'review-title' );
         titleElement?.addEventListener( 'click', beginTitleEdit );
         titleElement?.addEventListener( 'focus', beginTitleEdit );
@@ -874,6 +977,11 @@
         document.getElementById( 'undo-button' )?.addEventListener( 'click', runUndo );
         document.getElementById( 'redo-button' )?.addEventListener( 'click', runRedo );
         document.getElementById( 'reset-button' )?.addEventListener( 'click', resetCanvas );
+        document.getElementById( 'remove-edit-button' )?.addEventListener( 'click', removeSelectedEdit );
+        document.getElementById( 'redaction-mode-actions' )?.addEventListener( 'click', event => {
+            const mode = event.target?.dataset?.contextRedactMode;
+            if ( mode ) changeSelectedRedactionMode( mode );
+        } );
         document.getElementById( 'include-timestamp-checkbox' )?.addEventListener( 'change', event => {
             saveIncludeTimestampPreference( event.target.checked );
         } );
@@ -890,6 +998,7 @@
         canvas?.addEventListener( 'pointermove', handlePointerMove );
         canvas?.addEventListener( 'pointerup', handlePointerUp );
         canvas?.addEventListener( 'pointercancel', handlePointerUp );
+        canvas?.addEventListener( 'contextmenu', handleCanvasContextMenu );
         window.addEventListener( 'resize', renderVisibleCanvas );
         document.addEventListener( 'keydown', handleKeyboardShortcuts );
     }
@@ -918,6 +1027,9 @@
         setRedactMode,
         setRedactMenuOpen,
         persistTitleChange,
+        removeSelectedEdit,
+        changeSelectedRedactionMode,
+        getAvailableRedactionModes,
         loadIncludeTimestampPreference,
         saveIncludeTimestampPreference,
         handleKeyboardShortcuts,

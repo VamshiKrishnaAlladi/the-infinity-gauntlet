@@ -373,6 +373,55 @@ body {
     transform: translateX(-50%) translateY(16px);
 }
 
+.edit-context-menu {
+    position: fixed;
+    z-index: 60;
+    min-width: 150px;
+    padding: 4px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+}
+
+.edit-context-menu-item {
+    width: 100%;
+    padding: 8px 10px;
+    color: var(--text-primary);
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.edit-context-menu-item:hover,
+.edit-context-menu-item:focus {
+    color: #111827;
+    background-color: var(--primary-color);
+    outline: none;
+}
+
+.edit-context-menu-section {
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.edit-context-menu-section:empty {
+    display: none;
+}
+
+#remove-edit-button {
+    color: var(--danger-color);
+}
+
+#remove-edit-button:hover,
+#remove-edit-button:focus {
+    color: #111827;
+    background-color: var(--danger-color);
+}
+
 .review-canvas {
     display: block;
     width: 100%;

@@ -1,7 +1,9 @@
 const {
     MAX_HISTORY_STATES,
     getScreenshotFilename,
+    changeSelectedRedactionMode,
     clampRectToCanvas,
+    getAvailableRedactionModes,
     normalizeRect,
     resizeRect,
     sanitizeFilenamePart,
@@ -12,6 +14,7 @@ const {
     handleKeyboardShortcuts,
     loadIncludeTimestampPreference,
     persistTitleChange,
+    removeSelectedEdit,
     saveIncludeTimestampPreference,
     trimHistory,
     state
@@ -28,6 +31,9 @@ describe( 'Screenshot Review Module', () => {
         state.createdAt = null;
         state.backingCanvas = null;
         state.includeTimestamp = true;
+        state.edits = [];
+        state.selectedEditId = null;
+        state.contextMenuEditId = null;
         jest.clearAllMocks();
     } );
 
@@ -215,5 +221,81 @@ describe( 'Screenshot Review Module', () => {
         handleKeyboardShortcuts( event );
 
         expect( event.preventDefault ).toHaveBeenCalled();
+    } );
+
+    it( 'should remove selected rectangle edits', () => {
+        state.edits = [
+            {
+                id: 'redaction-1',
+                kind: 'rect',
+                tool: 'redact',
+                mode: 'solid',
+                rect: { x: 0, y: 0, width: 10, height: 10 }
+            }
+        ];
+        state.selectedEditId = 'redaction-1';
+
+        expect( removeSelectedEdit() ).toBe( true );
+
+        expect( state.edits ).toEqual( [] );
+        expect( state.selectedEditId ).toBeNull();
+        expect( state.undoStack ).toHaveLength( 1 );
+    } );
+
+    it( 'should list alternate redaction modes for context menu actions', () => {
+        expect( getAvailableRedactionModes( {
+            id: 'redaction-1',
+            kind: 'rect',
+            tool: 'redact',
+            mode: 'solid'
+        } ) ).toEqual( [ 'mosaic', 'blur' ] );
+
+        expect( getAvailableRedactionModes( {
+            id: 'highlight-1',
+            kind: 'rect',
+            tool: 'highlight',
+            mode: null
+        } ) ).toEqual( [] );
+    } );
+
+    it( 'should change selected redaction mode', () => {
+        state.edits = [
+            {
+                id: 'redaction-1',
+                kind: 'rect',
+                tool: 'redact',
+                mode: 'solid',
+                rect: { x: 0, y: 0, width: 10, height: 10 }
+            }
+        ];
+        state.selectedEditId = 'redaction-1';
+
+        expect( changeSelectedRedactionMode( 'blur' ) ).toBe( true );
+
+        expect( state.edits[ 0 ].mode ).toBe( 'blur' );
+        expect( state.undoStack ).toHaveLength( 1 );
+    } );
+
+    it( 'should delete selected edits with Delete key', () => {
+        state.edits = [
+            {
+                id: 'redaction-1',
+                kind: 'rect',
+                tool: 'redact',
+                mode: 'solid',
+                rect: { x: 0, y: 0, width: 10, height: 10 }
+            }
+        ];
+        state.selectedEditId = 'redaction-1';
+        const event = {
+            key: 'Delete',
+            target: document.body,
+            preventDefault: jest.fn()
+        };
+
+        handleKeyboardShortcuts( event );
+
+        expect( event.preventDefault ).toHaveBeenCalled();
+        expect( state.edits ).toEqual( [] );
     } );
 } );

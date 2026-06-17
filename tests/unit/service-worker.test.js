@@ -205,7 +205,7 @@ describe( 'Service Worker Module', () => {
         } );
 
         describe( 'captureFullPageScreenshot message', () => {
-            function mockScreenshotExecution( metricsOverride = {} ) {
+            function mockScreenshotExecution( metricsOverride = {}, captureScrollPositions = [] ) {
                 const metrics = {
                     scrollWidth: 800,
                     scrollHeight: 1000,
@@ -225,6 +225,7 @@ describe( 'Service Worker Module', () => {
                     title: 'Test Page',
                     ...metricsOverride
                 };
+                let captureScrollPositionIndex = 0;
 
                 chrome.tabs.query.mockResolvedValue( [
                     { id: 123, windowId: 456, index: 4, url: 'https://example.com/page' }
@@ -238,6 +239,17 @@ describe( 'Service Worker Module', () => {
                             result: {
                                 scrollX: args[ 0 ] || 0,
                                 scrollY: args[ 1 ] || 0
+                            }
+                        } ];
+                    }
+                    if ( func.name === 'getScreenshotScrollPosition' ) {
+                        if ( captureScrollPositions.length === 0 ) return [ { result: {} } ];
+
+                        const scrollY = captureScrollPositions[ captureScrollPositionIndex++ ];
+                        return [ {
+                            result: {
+                                scrollX: 0,
+                                scrollY: scrollY ?? 0
                             }
                         } ];
                     }
@@ -288,6 +300,23 @@ describe( 'Service Worker Module', () => {
                         dataUrl: 'data:image/png;base64,stitched',
                         title: 'Test Page'
                     } ) );
+            } );
+
+            it( 'should store scroll positions observed at capture time', async () => {
+                mockScreenshotExecution( {}, [ 0, 245, 500 ] );
+
+                await handleMessage( { type: 'captureFullPageScreenshot' } );
+
+                expect( chrome.runtime.sendMessage ).toHaveBeenCalledWith( {
+                    type: 'stitchScreenshotTiles',
+                    payload: expect.objectContaining( {
+                        tiles: [
+                            expect.objectContaining( { y: 0 } ),
+                            expect.objectContaining( { y: 245 } ),
+                            expect.objectContaining( { y: 500 } )
+                        ]
+                    } )
+                } );
             } );
 
             it( 'should reject browser pages before capture', async () => {

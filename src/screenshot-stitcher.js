@@ -1,4 +1,11 @@
 ( function() {
+    const VISUAL_OVERLAP_MIN_PX = 24;
+    const VISUAL_OVERLAP_MAX_PX = 900;
+    const VISUAL_OVERLAP_SEARCH_RADIUS_PX = 160;
+    const VISUAL_OVERLAP_MAX_AVERAGE_DIFF = 10;
+    const VISUAL_OVERLAP_MIN_INFORMATION = 1;
+    const VISUAL_OVERLAP_SAMPLE_STEP_PX = 8;
+
     function loadImage( dataUrl ) {
         return new Promise( ( resolve, reject ) => {
             const image = new Image();
@@ -8,12 +15,25 @@
         } );
     }
 
+    function getCapturedContentHeight( metrics, image ) {
+        const scale = metrics.devicePixelRatio || 1;
+        const capturedViewportHeight = image.height / scale;
+        if ( !metrics.usesElementScroll ) return capturedViewportHeight;
+
+        const scrollContainerTop = metrics.scrollContainerTop || 0;
+        const scrollContainerBottom = Math.min(
+            metrics.scrollContainerBottom || metrics.viewportHeight || capturedViewportHeight,
+            capturedViewportHeight
+        );
+        return Math.max( 0, scrollContainerBottom - scrollContainerTop );
+    }
+
     function getTileCrop( tile, metrics, image, drawnUntilY ) {
         const scale = metrics.devicePixelRatio || 1;
-        const captureViewportHeight = metrics.captureViewportHeight || metrics.viewportHeight;
+        const capturedContentHeight = getCapturedContentHeight( metrics, image );
         const captureScrollHeight = metrics.captureScrollHeight || metrics.scrollHeight;
         const pageStartY = Math.max( tile.y, drawnUntilY );
-        const pageEndY = Math.min( tile.y + captureViewportHeight, captureScrollHeight );
+        const pageEndY = Math.min( tile.y + capturedContentHeight, captureScrollHeight );
         if ( pageEndY <= pageStartY ) return null;
 
         const sourceYOffset = metrics.usesElementScroll ? metrics.scrollContainerTop || 0 : 0;
@@ -38,6 +58,186 @@
             destinationWidth: Math.min( image.width - sourceXOffset * scale, sourceWidth ),
             destinationHeight: sourceHeight
         };
+    }
+
+    function getDrawnUntilY( crop, metrics ) {
+        const scale = metrics.devicePixelRatio || 1;
+        const destinationYOffset = metrics.usesElementScroll ? metrics.scrollContainerTop || 0 : 0;
+        return ( crop.destinationY + crop.destinationHeight ) / scale - destinationYOffset;
+    }
+
+    function getCropAfterSkippingOverlap( crop, overlapPx, destinationY, metrics ) {
+        const scale = metrics.devicePixelRatio || 1;
+        const destinationYOffset = metrics.usesElementScroll ? metrics.scrollContainerTop || 0 : 0;
+        const adjustedSourceHeight = crop.sourceHeight - overlapPx;
+        if ( adjustedSourceHeight <= 0 ) return null;
+
+        return {
+            ...crop,
+            sourceY: crop.sourceY + overlapPx,
+            sourceHeight: adjustedSourceHeight,
+            destinationY: ( destinationYOffset + destinationY ) * scale,
+            destinationHeight: adjustedSourceHeight
+        };
+    }
+
+    function getPixelOffset( x, y, width, channels ) {
+        return ( y * width + x ) * channels;
+    }
+
+    function getBandDifference( firstData, secondData, width, channels, firstStartY, secondStartY, height ) {
+        let difference = 0;
+        let samples = 0;
+
+        for ( let y = 0; y < height; y++ ) {
+            for ( let x = 0; x < width; x += VISUAL_OVERLAP_SAMPLE_STEP_PX ) {
+                const firstOffset = getPixelOffset( x, firstStartY + y, width, channels );
+                const secondOffset = getPixelOffset( x, secondStartY + y, width, channels );
+                difference += Math.abs( firstData[ firstOffset ] - secondData[ secondOffset ] );
+                difference += Math.abs( firstData[ firstOffset + 1 ] - secondData[ secondOffset + 1 ] );
+                difference += Math.abs( firstData[ firstOffset + 2 ] - secondData[ secondOffset + 2 ] );
+                samples += 3;
+            }
+        }
+
+        return samples === 0 ? Infinity : difference / samples;
+    }
+
+    function getBandInformation( data, width, channels, startY, height ) {
+        let difference = 0;
+        let samples = 0;
+
+        for ( let y = 1; y < height; y++ ) {
+            for ( let x = 0; x < width; x += VISUAL_OVERLAP_SAMPLE_STEP_PX ) {
+                const previousOffset = getPixelOffset( x, startY + y - 1, width, channels );
+                const currentOffset = getPixelOffset( x, startY + y, width, channels );
+                difference += Math.abs( data[ previousOffset ] - data[ currentOffset ] );
+                difference += Math.abs( data[ previousOffset + 1 ] - data[ currentOffset + 1 ] );
+                difference += Math.abs( data[ previousOffset + 2 ] - data[ currentOffset + 2 ] );
+                samples += 3;
+            }
+        }
+
+        return samples === 0 ? 0 : difference / samples;
+    }
+
+    function findBestVisualOverlapHeight( options ) {
+        const {
+            previousData,
+            currentData,
+            width,
+            previousHeight,
+            currentHeight,
+            expectedOverlap,
+            channels = 4,
+            minOverlap = VISUAL_OVERLAP_MIN_PX,
+            maxOverlap = VISUAL_OVERLAP_MAX_PX,
+            searchRadius = VISUAL_OVERLAP_SEARCH_RADIUS_PX,
+            maxAverageDiff = VISUAL_OVERLAP_MAX_AVERAGE_DIFF,
+            minInformation = VISUAL_OVERLAP_MIN_INFORMATION
+        } = options;
+        const upperBound = Math.min( previousHeight, currentHeight, maxOverlap );
+        const lowerBound = Math.max( minOverlap, 1 );
+        if ( upperBound < lowerBound ) return null;
+
+        const searchStart = Math.max( lowerBound, expectedOverlap - searchRadius );
+        const searchEnd = Math.min( upperBound, expectedOverlap + searchRadius );
+        let bestOverlap = null;
+        let bestScore = Infinity;
+
+        for ( let overlap = searchStart; overlap <= searchEnd; overlap++ ) {
+            const previousStartY = previousHeight - overlap;
+            const currentStartY = 0;
+            const currentInformation = getBandInformation( currentData, width, channels, currentStartY, overlap );
+            const previousInformation = getBandInformation( previousData, width, channels, previousStartY, overlap );
+            if ( Math.max( currentInformation, previousInformation ) < minInformation ) continue;
+
+            const score = getBandDifference(
+                previousData,
+                currentData,
+                width,
+                channels,
+                previousStartY,
+                currentStartY,
+                overlap
+            );
+            const scoreTieBreak = Math.abs( overlap - expectedOverlap ) * 0.001;
+            if ( score + scoreTieBreak < bestScore ) {
+                bestScore = score + scoreTieBreak;
+                bestOverlap = overlap;
+            }
+        }
+
+        return bestOverlap !== null && bestScore <= maxAverageDiff ? bestOverlap : null;
+    }
+
+    function getImageDataFromImage( image, sourceX, sourceY, width, height ) {
+        const sampleCanvas = document.createElement( 'canvas' );
+        sampleCanvas.width = image.width;
+        sampleCanvas.height = image.height;
+        const sampleContext = sampleCanvas.getContext( '2d', { willReadFrequently: true } );
+        sampleContext.drawImage( image, 0, 0 );
+        return sampleContext.getImageData( sourceX, sourceY, width, height ).data;
+    }
+
+    function getVisualOverlapHeight( context, image, crop, tile, metrics, drawnUntilY ) {
+        const scale = metrics.devicePixelRatio || 1;
+        const destinationYOffset = metrics.usesElementScroll ? metrics.scrollContainerTop || 0 : 0;
+        const expectedOverlap = Math.round( Math.max( 0, drawnUntilY - tile.y ) * scale );
+        if ( expectedOverlap < VISUAL_OVERLAP_MIN_PX ) return null;
+
+        const boundaryY = Math.round( ( destinationYOffset + drawnUntilY ) * scale );
+        const maxSearchOverlap = Math.min(
+            Math.round( VISUAL_OVERLAP_MAX_PX * scale ),
+            crop.sourceHeight - 1,
+            boundaryY,
+            expectedOverlap + Math.round( VISUAL_OVERLAP_SEARCH_RADIUS_PX * scale )
+        );
+        if ( maxSearchOverlap < VISUAL_OVERLAP_MIN_PX ) return null;
+
+        const sourceX = Math.round( crop.sourceX );
+        const sourceY = Math.round( crop.sourceY );
+        const destinationX = Math.round( crop.destinationX );
+        const previousY = boundaryY - maxSearchOverlap;
+        const sampleWidth = Math.floor(
+            Math.min(
+                crop.sourceWidth,
+                crop.destinationWidth,
+                image.width - sourceX,
+                context.canvas.width - destinationX
+            )
+        );
+        if ( sampleWidth <= 0 || previousY < 0 ) return null;
+
+        try {
+            const previousData = context.getImageData(
+                destinationX,
+                previousY,
+                sampleWidth,
+                maxSearchOverlap
+            ).data;
+            const currentData = getImageDataFromImage(
+                image,
+                sourceX,
+                sourceY,
+                sampleWidth,
+                maxSearchOverlap
+            );
+
+            return findBestVisualOverlapHeight( {
+                previousData,
+                currentData,
+                width: sampleWidth,
+                previousHeight: maxSearchOverlap,
+                currentHeight: maxSearchOverlap,
+                expectedOverlap,
+                minOverlap: Math.round( VISUAL_OVERLAP_MIN_PX * scale ),
+                maxOverlap: maxSearchOverlap,
+                searchRadius: Math.round( VISUAL_OVERLAP_SEARCH_RADIUS_PX * scale )
+            } );
+        } catch ( error ) {
+            return null;
+        }
     }
 
     function getInitialElementScrollCrop( metrics, image ) {
@@ -149,14 +349,25 @@
             const image = index === 0 ? firstImage : await loadImage( tile.dataUrl );
             if ( metrics.usesElementScroll && index === 0 ) {
                 drawCrop( context, image, getInitialElementScrollCrop( metrics, image ) );
-                drawnUntilY = Math.min(
-                    metrics.captureViewportHeight || metrics.viewportHeight,
-                    metrics.captureScrollHeight || metrics.scrollHeight
-                );
+                const firstScrollCrop = getTileCrop( tile, metrics, image, 0 );
+                if ( firstScrollCrop ) {
+                    drawCrop( context, image, firstScrollCrop );
+                    drawnUntilY = Math.min(
+                        getDrawnUntilY( firstScrollCrop, metrics ),
+                        metrics.captureScrollHeight || metrics.scrollHeight
+                    );
+                }
                 continue;
             }
 
-            const crop = getTileCrop( tile, metrics, image, drawnUntilY );
+            const geometryCrop = getTileCrop( tile, metrics, image, drawnUntilY );
+            const fullTileCrop = getTileCrop( tile, metrics, image, tile.y );
+            const visualOverlap = fullTileCrop
+                ? getVisualOverlapHeight( context, image, fullTileCrop, tile, metrics, drawnUntilY )
+                : null;
+            const crop = visualOverlap === null
+                ? geometryCrop
+                : getCropAfterSkippingOverlap( fullTileCrop, visualOverlap, drawnUntilY, metrics );
             if ( !crop ) continue;
 
             drawCrop( context, image, crop );
@@ -164,7 +375,7 @@
             drawnUntilY = Math.max(
                 drawnUntilY,
                 Math.min(
-                    tile.y + ( metrics.captureViewportHeight || metrics.viewportHeight ),
+                    getDrawnUntilY( crop, metrics ),
                     metrics.captureScrollHeight || metrics.scrollHeight
                 )
             );
@@ -190,4 +401,14 @@
 
         return true;
     } );
+
+    if ( typeof module !== 'undefined' && module.exports ) {
+        module.exports = {
+            findBestVisualOverlapHeight,
+            getCapturedContentHeight,
+            getCropAfterSkippingOverlap,
+            getDrawnUntilY,
+            getTileCrop
+        };
+    }
 } )();

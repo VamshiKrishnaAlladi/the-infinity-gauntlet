@@ -481,6 +481,63 @@ function scrollPageForScreenshot( x, y ) {
     };
 }
 
+function getScreenshotScrollPosition() {
+    function getScrollElementScore( element ) {
+        const scrollHeight = element.scrollHeight || 0;
+        const clientHeight = element.clientHeight || 0;
+        const scrollableHeight = scrollHeight - clientHeight;
+        if ( scrollableHeight < 8 ) return 0;
+
+        if ( element === document.documentElement || element === document.body || element === document.scrollingElement ) {
+            return scrollableHeight * window.innerWidth;
+        }
+
+        const style = window.getComputedStyle( element );
+        const overflowY = style.overflowY;
+        const canScroll = overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay';
+        if ( !canScroll ) return 0;
+
+        const rect = element.getBoundingClientRect();
+        const visibleWidth = Math.max( 0, Math.min( rect.right, window.innerWidth ) - Math.max( rect.left, 0 ) );
+        const visibleHeight = Math.max( 0, Math.min( rect.bottom, window.innerHeight ) - Math.max( rect.top, 0 ) );
+        const visibleArea = visibleWidth * visibleHeight;
+        if ( visibleArea < window.innerWidth * window.innerHeight * 0.2 ) return 0;
+
+        return scrollableHeight * visibleArea;
+    }
+
+    function getScrollElement() {
+        const scrollingElement = document.scrollingElement || document.documentElement;
+        const candidates = [
+            scrollingElement,
+            document.documentElement,
+            document.body,
+            ...Array.from( document.body?.querySelectorAll( '*' ) || [] )
+        ].filter( Boolean );
+
+        let bestElement = scrollingElement;
+        let bestScore = getScrollElementScore( scrollingElement );
+
+        for ( const element of candidates ) {
+            const score = getScrollElementScore( element );
+            if ( score > bestScore ) {
+                bestScore = score;
+                bestElement = element;
+            }
+        }
+
+        return bestElement;
+    }
+
+    const scrollElement = getScrollElement();
+    const isWindowScroll = scrollElement === document.documentElement || scrollElement === document.body;
+
+    return {
+        scrollX: isWindowScroll ? window.scrollX : scrollElement.scrollLeft,
+        scrollY: isWindowScroll ? window.scrollY : scrollElement.scrollTop
+    };
+}
+
 function prepareStickyElementsForScreenshot() {
     const scrollbarStyle = document.createElement( 'style' );
     scrollbarStyle.id = 'infinity-gauntlet-hide-scrollbars';
@@ -740,11 +797,12 @@ async function captureFullPageScreenshot() {
             await executeInAllFrames( tab.id, setStickyElementsForScreenshot, [ mode ] );
             await wait( SCREENSHOT_CAPTURE_DELAY_MS );
 
+            const captureScrollResult = await executeInTab( tab.id, getScreenshotScrollPosition );
             const dataUrl = await chrome.tabs.captureVisibleTab( tab.windowId, { format: 'png' } );
             tiles.push( {
                 dataUrl,
-                x: scrollResult?.scrollX || 0,
-                y: scrollResult?.scrollY || y,
+                x: captureScrollResult?.scrollX ?? scrollResult?.scrollX ?? 0,
+                y: captureScrollResult?.scrollY ?? scrollResult?.scrollY ?? y,
                 mode
             } );
         }

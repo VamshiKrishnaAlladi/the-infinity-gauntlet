@@ -2,6 +2,7 @@ const {
     findBestVisualOverlapHeight,
     getCapturedContentHeight,
     getCropAfterSkippingOverlap,
+    getCropWithVisualOverlapFallback,
     getDrawnUntilY,
     getTileCrop
 } = require( '../../src/screenshot-stitcher' );
@@ -99,6 +100,28 @@ describe( 'Screenshot Stitcher Module', () => {
         expect( overlap ).toBe( 30 );
     } );
 
+    it( 'should reject far visual matches in repetitive content', () => {
+        const width = 32;
+        const previousRows = Array.from( { length: 140 }, ( _, index ) => index + 100 );
+        const currentRows = Array.from( { length: 140 }, ( _, index ) => index + 180 );
+
+        const overlap = findBestVisualOverlapHeight( {
+            previousData: makeRowData( previousRows, width ),
+            currentData: makeRowData( currentRows, width ),
+            width,
+            previousHeight: previousRows.length,
+            currentHeight: currentRows.length,
+            expectedOverlap: 32,
+            minOverlap: 10,
+            maxOverlap: 120,
+            searchRadius: 100,
+            maxDeviation: 24,
+            maxAverageDiff: 1
+        } );
+
+        expect( overlap ).toBeNull();
+    } );
+
     it( 'should not visually match low-information bands', () => {
         const width = 32;
         const height = 60;
@@ -146,5 +169,68 @@ describe( 'Screenshot Stitcher Module', () => {
             destinationWidth: 100,
             destinationHeight: 220
         } );
+    } );
+
+    it( 'should reject a final visual-overlap crop that clips page bottom', () => {
+        const crop = {
+            sourceX: 0,
+            sourceY: 0,
+            sourceWidth: 100,
+            sourceHeight: 300,
+            destinationX: 0,
+            destinationY: 500,
+            destinationWidth: 100,
+            destinationHeight: 300
+        };
+
+        expect( getCropAfterSkippingOverlap( crop, 120, 620, {
+            devicePixelRatio: 1,
+            usesElementScroll: false
+        }, 900 ) ).toBeNull();
+
+        expect( getCropAfterSkippingOverlap( crop, 20, 620, {
+            devicePixelRatio: 1,
+            usesElementScroll: false
+        }, 900 ) ).toEqual( expect.objectContaining( {
+            sourceY: 20,
+            sourceHeight: 280,
+            destinationY: 620,
+            destinationHeight: 280
+        } ) );
+    } );
+
+    it( 'should fall back to geometry crop when final visual crop is rejected', () => {
+        const geometryCrop = {
+            sourceX: 0,
+            sourceY: 100,
+            sourceWidth: 100,
+            sourceHeight: 300,
+            destinationX: 0,
+            destinationY: 600,
+            destinationWidth: 100,
+            destinationHeight: 300
+        };
+        const fullTileCrop = {
+            sourceX: 0,
+            sourceY: 0,
+            sourceWidth: 100,
+            sourceHeight: 400,
+            destinationX: 0,
+            destinationY: 500,
+            destinationWidth: 100,
+            destinationHeight: 400
+        };
+
+        expect( getCropWithVisualOverlapFallback(
+            geometryCrop,
+            fullTileCrop,
+            250,
+            600,
+            {
+                devicePixelRatio: 1,
+                usesElementScroll: false
+            },
+            900
+        ) ).toBe( geometryCrop );
     } );
 } );

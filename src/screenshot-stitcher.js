@@ -2,6 +2,7 @@
     const VISUAL_OVERLAP_MIN_PX = 24;
     const VISUAL_OVERLAP_MAX_PX = 900;
     const VISUAL_OVERLAP_SEARCH_RADIUS_PX = 160;
+    const VISUAL_OVERLAP_MAX_DEVIATION_PX = 24;
     const VISUAL_OVERLAP_MAX_AVERAGE_DIFF = 10;
     const VISUAL_OVERLAP_MIN_INFORMATION = 1;
     const VISUAL_OVERLAP_SAMPLE_STEP_PX = 8;
@@ -66,19 +67,40 @@
         return ( crop.destinationY + crop.destinationHeight ) / scale - destinationYOffset;
     }
 
-    function getCropAfterSkippingOverlap( crop, overlapPx, destinationY, metrics ) {
+    function getCropAfterSkippingOverlap( crop, overlapPx, destinationY, metrics, minimumDrawnUntilY ) {
         const scale = metrics.devicePixelRatio || 1;
         const destinationYOffset = metrics.usesElementScroll ? metrics.scrollContainerTop || 0 : 0;
         const adjustedSourceHeight = crop.sourceHeight - overlapPx;
         if ( adjustedSourceHeight <= 0 ) return null;
 
-        return {
+        const adjustedCrop = {
             ...crop,
             sourceY: crop.sourceY + overlapPx,
             sourceHeight: adjustedSourceHeight,
             destinationY: ( destinationYOffset + destinationY ) * scale,
             destinationHeight: adjustedSourceHeight
         };
+
+        if (
+            typeof minimumDrawnUntilY === 'number' &&
+            getDrawnUntilY( adjustedCrop, metrics ) < minimumDrawnUntilY
+        ) {
+            return null;
+        }
+
+        return adjustedCrop;
+    }
+
+    function getCropWithVisualOverlapFallback( geometryCrop, fullTileCrop, visualOverlap, drawnUntilY, metrics, minimumDrawnUntilY ) {
+        if ( visualOverlap === null || !fullTileCrop ) return geometryCrop;
+
+        return getCropAfterSkippingOverlap(
+            fullTileCrop,
+            visualOverlap,
+            drawnUntilY,
+            metrics,
+            minimumDrawnUntilY
+        ) || geometryCrop;
     }
 
     function getPixelOffset( x, y, width, channels ) {
@@ -133,6 +155,7 @@
             minOverlap = VISUAL_OVERLAP_MIN_PX,
             maxOverlap = VISUAL_OVERLAP_MAX_PX,
             searchRadius = VISUAL_OVERLAP_SEARCH_RADIUS_PX,
+            maxDeviation = VISUAL_OVERLAP_MAX_DEVIATION_PX,
             maxAverageDiff = VISUAL_OVERLAP_MAX_AVERAGE_DIFF,
             minInformation = VISUAL_OVERLAP_MIN_INFORMATION
         } = options;
@@ -168,7 +191,9 @@
             }
         }
 
-        return bestOverlap !== null && bestScore <= maxAverageDiff ? bestOverlap : null;
+        if ( bestOverlap === null || bestScore > maxAverageDiff ) return null;
+        if ( Math.abs( bestOverlap - expectedOverlap ) > maxDeviation ) return null;
+        return bestOverlap;
     }
 
     function getImageDataFromImage( image, sourceX, sourceY, width, height ) {
@@ -233,7 +258,8 @@
                 expectedOverlap,
                 minOverlap: Math.round( VISUAL_OVERLAP_MIN_PX * scale ),
                 maxOverlap: maxSearchOverlap,
-                searchRadius: Math.round( VISUAL_OVERLAP_SEARCH_RADIUS_PX * scale )
+                searchRadius: Math.round( VISUAL_OVERLAP_SEARCH_RADIUS_PX * scale ),
+                maxDeviation: Math.round( VISUAL_OVERLAP_MAX_DEVIATION_PX * scale )
             } );
         } catch ( error ) {
             return null;
@@ -365,9 +391,17 @@
             const visualOverlap = fullTileCrop
                 ? getVisualOverlapHeight( context, image, fullTileCrop, tile, metrics, drawnUntilY )
                 : null;
-            const crop = visualOverlap === null
-                ? geometryCrop
-                : getCropAfterSkippingOverlap( fullTileCrop, visualOverlap, drawnUntilY, metrics );
+            const minimumDrawnUntilY = index === sortedTiles.length - 1
+                ? metrics.captureScrollHeight || metrics.scrollHeight
+                : undefined;
+            const crop = getCropWithVisualOverlapFallback(
+                geometryCrop,
+                fullTileCrop,
+                visualOverlap,
+                drawnUntilY,
+                metrics,
+                minimumDrawnUntilY
+            );
             if ( !crop ) continue;
 
             drawCrop( context, image, crop );
@@ -407,6 +441,7 @@
             findBestVisualOverlapHeight,
             getCapturedContentHeight,
             getCropAfterSkippingOverlap,
+            getCropWithVisualOverlapFallback,
             getDrawnUntilY,
             getTileCrop
         };

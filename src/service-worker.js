@@ -23,6 +23,17 @@ if ( !screenshotStore && typeof require !== 'undefined' ) {
     screenshotStore = require( './screenshot-store' );
 }
 
+let timeFormat = typeof globalThis !== 'undefined' ? globalThis.InfinityGauntletTimeFormat : undefined;
+
+if ( !timeFormat && typeof importScripts === 'function' ) {
+    importScripts( 'utils/time-format.js' );
+    timeFormat = globalThis.InfinityGauntletTimeFormat;
+}
+
+if ( !timeFormat && typeof require !== 'undefined' ) {
+    timeFormat = require( './utils/time-format' );
+}
+
 function isInternalUrl( url ) {
     return typeof url === 'string' && INTERNAL_URL_PREFIXES.some( prefix => url.startsWith( prefix ) );
 }
@@ -231,33 +242,8 @@ function wait( ms ) {
     return new Promise( resolve => setTimeout( resolve, ms ) );
 }
 
-function padDatePart( value ) {
-    return value.toString().padStart( 2, '0' );
-}
-
-function getLocalTimestampPrefix( date = new Date() ) {
-    const year = date.getFullYear();
-    const month = padDatePart( date.getMonth() + 1 );
-    const day = padDatePart( date.getDate() );
-    const hours = padDatePart( date.getHours() );
-    const minutes = padDatePart( date.getMinutes() );
-    const seconds = padDatePart( date.getSeconds() );
-
-    return `${year}-${month}-${day} ${hours}-${minutes}-${seconds}`;
-}
-
-function sanitizeFilenamePart( value ) {
-    return ( value || 'Untitled Page' )
-        .replace( /[<>:"/\\|?*\u0000-\u001F]/g, ' ' )
-        .replace( /\s+/g, ' ' )
-        .trim()
-        .slice( 0, 120 ) || 'Untitled Page';
-}
-
 function getScreenshotFilename( title, date = new Date() ) {
-    const timestamp = getLocalTimestampPrefix( date );
-    const pageTitle = sanitizeFilenamePart( title );
-    return `[${timestamp}] ${pageTitle}.png`;
+    return timeFormat.getScreenshotFilename( title, { date } );
 }
 
 function buildScrollPositions( scrollHeight, viewportHeight ) {

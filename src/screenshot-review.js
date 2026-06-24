@@ -44,30 +44,12 @@
     const timeFormat = root.InfinityGauntletTimeFormat ||
         ( typeof require !== 'undefined' ? require( './utils/time-format' ) : null );
 
-    function padDatePart( value ) {
-        return value.toString().padStart( 2, '0' );
-    }
-
-    function getLocalTimestampPrefix( date = new Date() ) {
-        return [
-            date.getFullYear(),
-            padDatePart( date.getMonth() + 1 ),
-            padDatePart( date.getDate() )
-        ].join( '-' ) + ` ${padDatePart( date.getHours() )}-${padDatePart( date.getMinutes() )}-${padDatePart( date.getSeconds() )}`;
-    }
-
     function sanitizeFilenamePart( value ) {
-        return ( value || 'Untitled Page' )
-            .replace( /[<>:"/\\|?*\u0000-\u001F]/g, ' ' )
-            .replace( /\s+/g, ' ' )
-            .trim()
-            .slice( 0, 120 ) || 'Untitled Page';
+        return timeFormat.sanitizeFilenamePart( value );
     }
 
     function getScreenshotFilename( title, date = new Date(), includeTimestamp = true ) {
-        const sanitizedTitle = sanitizeFilenamePart( title );
-        if ( !includeTimestamp ) return `${sanitizedTitle}.png`;
-        return `[${getLocalTimestampPrefix( date )}] ${sanitizedTitle}.png`;
+        return timeFormat.getScreenshotFilename( title, { date, includeTimestamp } );
     }
 
     function formatSavedAtMessage( timestamp = Date.now(), now = Date.now() ) {

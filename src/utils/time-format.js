@@ -25,6 +25,37 @@
         return `${MONTH_NAMES[ date.getMonth() ]} ${date.getDate()}${getOrdinalSuffix( date.getDate() )} ${date.getFullYear()}`;
     }
 
+    function padDatePart( value ) {
+        return value.toString().padStart( 2, '0' );
+    }
+
+    function getLocalTimestampPrefix( date = new Date() ) {
+        const period = date.getHours() < 12 ? 'AM' : 'PM';
+        const hours = padDatePart( ( date.getHours() % 12 ) || 12 );
+        const year = date.getFullYear();
+        const month = padDatePart( date.getMonth() + 1 );
+        const day = padDatePart( date.getDate() );
+        const minutes = padDatePart( date.getMinutes() );
+        const seconds = padDatePart( date.getSeconds() );
+
+        return `${year}-${month}-${day} ${hours}.${minutes}.${seconds} ${period}`;
+    }
+
+    function sanitizeFilenamePart( value ) {
+        return ( value || 'Untitled Page' )
+            .replace( /[<>:"/\\|?*\u0000-\u001F]/g, ' ' )
+            .replace( /\s+/g, ' ' )
+            .trim()
+            .slice( 0, 120 ) || 'Untitled Page';
+    }
+
+    function getScreenshotFilename( title, { date = new Date(), includeTimestamp = true, suffix = '' } = {} ) {
+        const sanitizedTitle = sanitizeFilenamePart( title );
+        const suffixPart = suffix ? ` - ${suffix}` : '';
+        if ( !includeTimestamp ) return `${sanitizedTitle}${suffixPart}.png`;
+        return `[${getLocalTimestampPrefix( date )}] ${sanitizedTitle}${suffixPart}.png`;
+    }
+
     function formatDisplayTimestamp( timestamp, now = Date.now() ) {
         if ( !timestamp ) return 'Unknown';
 
@@ -44,7 +75,11 @@
     const api = {
         formatDisplayTimestamp,
         formatAbsoluteDate,
-        getOrdinalSuffix
+        getOrdinalSuffix,
+        padDatePart,
+        getLocalTimestampPrefix,
+        sanitizeFilenamePart,
+        getScreenshotFilename
     };
 
     root.InfinityGauntletTimeFormat = api;

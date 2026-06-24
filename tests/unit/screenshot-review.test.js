@@ -58,7 +58,7 @@ describe( 'Screenshot Review Module', () => {
             new Date( 2026, 4, 25, 12, 15, 9 )
         );
 
-        expect( filename ).toBe( '[2026-05-25 12-15-09] Cluster Backup Policy.png' );
+        expect( filename ).toBe( '[2026-05-25 12.15.09 PM] Cluster Backup Policy.png' );
     } );
 
     it( 'should build filenames without timestamp when disabled', () => {

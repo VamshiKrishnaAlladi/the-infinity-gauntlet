@@ -339,7 +339,7 @@ describe( 'Service Worker Module', () => {
                     new Date( 2026, 4, 25, 11, 26, 7 )
                 );
 
-                expect( filename ).toBe( '[2026-05-25 11-26-07] Backup Cluster Prod.png' );
+                expect( filename ).toBe( '[2026-05-25 11.26.07 AM] Backup Cluster Prod.png' );
             } );
 
         } );
